@@ -16,6 +16,7 @@
 #include <QJsonObject>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QLockFile>
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
@@ -49,6 +50,25 @@ static QString youtubeUrlArgument(const QString &argument)
     return isYouTubeUrl(url) ? url.toString(QUrl::FullyEncoded) : QString();
 }
 
+static bool sendUrlsToRunningInstance(const QString &serverName, const QStringList &urls,
+                                     int timeoutMs)
+{
+    QLocalSocket existingInstance;
+    existingInstance.connectToServer(serverName);
+    if (!existingInstance.waitForConnected(timeoutMs))
+        return false;
+
+    QJsonArray jsonUrls;
+    for (const QString &url : urls)
+        jsonUrls.append(url);
+    const QByteArray message = QJsonDocument(QJsonObject{{QStringLiteral("urls"), jsonUrls}})
+                                   .toJson(QJsonDocument::Compact) + '\n';
+    const bool sent = existingInstance.write(message) == message.size()
+                      && existingInstance.waitForBytesWritten(1000);
+    existingInstance.disconnectFromServer();
+    return sent;
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -78,27 +98,27 @@ int main(int argc, char *argv[])
     }
 
     const QString serverName = appServerName();
-    QLocalSocket existingInstance;
-    existingInstance.connectToServer(serverName);
-    if (existingInstance.waitForConnected(350)) {
-        QJsonArray urls;
-        for (const QString &url : requestedUrls)
-            urls.append(url);
-        const QByteArray message = QJsonDocument(QJsonObject{{QStringLiteral("urls"), urls}})
-                                       .toJson(QJsonDocument::Compact) + '\n';
-        existingInstance.write(message);
-        existingInstance.waitForBytesWritten(1000);
-        existingInstance.disconnectFromServer();
+    if (sendUrlsToRunningInstance(serverName, requestedUrls, 350))
         return 0;
+
+    QLockFile instanceLock(serverName + QStringLiteral(".lock"));
+    instanceLock.setStaleLockTime(1000);
+    if (!instanceLock.tryLock(2000)) {
+        if (sendUrlsToRunningInstance(serverName, requestedUrls, 1500))
+            return 0;
+        qWarning() << "Another Linkamp instance is starting; request could not be forwarded";
+        return 1;
     }
 
+    // Only remove an orphaned socket after taking the per-user startup lock.
     QLocalServer::removeServer(serverName);
     QLocalServer server;
     server.setSocketOptions(QLocalServer::UserAccessOption);
-    if (!server.listen(serverName))
+    if (!server.listen(serverName)) {
         qWarning() << "Linkamp URL bridge could not listen:" << server.errorString();
-    else
-        qInfo() << "Linkamp URL bridge listening at" << server.fullServerName();
+        return 1;
+    }
+    qInfo() << "Linkamp URL bridge listening at" << server.fullServerName();
 
     MainWindow window;
     QHash<QLocalSocket *, QByteArray> pendingMessages;
