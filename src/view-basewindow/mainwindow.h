@@ -20,6 +20,8 @@
 class QDialog;
 class QMoveEvent;
 class QShowEvent;
+class QCloseEvent;
+class QTimer;
 
 class MainWindow : public QMainWindow
 {
@@ -56,7 +58,16 @@ public slots:
 protected:
     void moveEvent(QMoveEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
+
+private:
+    void loadSavedPlaylist();
+    void schedulePlaylistSave();
+    void saveSavedPlaylist();
+    static QString defaultPlaylistPath();
+    QTimer *m_playlistSaveTimer = nullptr;
+    bool m_isLoadingPlaylist = false;
 
 private:
     QMediaPlaylist *m_playlist = nullptr;

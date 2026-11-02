@@ -26,3 +26,8 @@ CMakeCache.txt.prev
 .cmake
 
 .DS_Store
+
+# Working assets
+skin/classic-main.png
+skin/classic-pledit.png
+

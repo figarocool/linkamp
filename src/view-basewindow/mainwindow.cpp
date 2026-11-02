@@ -1,5 +1,9 @@
 #include <QFileDialog>
 #include <QDirIterator>
+#include <QCloseEvent>
+#include <QTimer>
+#include <QDir>
+#include <QFile>
 
 #include "mainwindow.h"
 #include "desktopplayerwindow.h"
@@ -58,6 +62,11 @@ MainWindow::MainWindow(QWidget *parent)
     // Setup playlist
     m_playlistModel = new PlaylistModel(this);
     m_playlist = m_playlistModel->playlist();
+    connect(m_playlist, &QMediaPlaylist::mediaInserted, this, &MainWindow::schedulePlaylistSave);
+    connect(m_playlist, &QMediaPlaylist::mediaRemoved, this, &MainWindow::schedulePlaylistSave);
+    connect(m_playlist, &QMediaPlaylist::mediaChanged, this, &MainWindow::schedulePlaylistSave);
+    connect(qApp, &QCoreApplication::aboutToQuit, this, &MainWindow::saveSavedPlaylist);
+    loadSavedPlaylist();
 
     // Setup views
     controlButtons = new ControlButtonsWidget(this);
@@ -192,8 +201,59 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    saveSavedPlaylist();
     PyGILState_Ensure();
     Py_Finalize();
+}
+
+QString MainWindow::defaultPlaylistPath()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir().mkpath(dir);
+    return QDir(dir).filePath(QStringLiteral("playlist.m3u8"));
+}
+
+void MainWindow::loadSavedPlaylist()
+{
+    const QString path = defaultPlaylistPath();
+    if (!QFile::exists(path))
+        return;
+
+    m_isLoadingPlaylist = true;
+    m_playlist->load(QUrl::fromLocalFile(path), "m3u8");
+    m_isLoadingPlaylist = false;
+}
+
+void MainWindow::schedulePlaylistSave()
+{
+    if (m_isLoadingPlaylist)
+        return;
+
+    if (!m_playlistSaveTimer) {
+        m_playlistSaveTimer = new QTimer(this);
+        m_playlistSaveTimer->setSingleShot(true);
+        m_playlistSaveTimer->setInterval(350);
+        connect(m_playlistSaveTimer, &QTimer::timeout, this, &MainWindow::saveSavedPlaylist);
+    }
+    m_playlistSaveTimer->start();
+}
+
+void MainWindow::saveSavedPlaylist()
+{
+    if (m_isLoadingPlaylist || !m_playlist)
+        return;
+
+    if (m_playlistSaveTimer && m_playlistSaveTimer->isActive())
+        m_playlistSaveTimer->stop();
+
+    const QString path = defaultPlaylistPath();
+    m_playlist->save(QUrl::fromLocalFile(path), "m3u8");
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    saveSavedPlaylist();
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::showPlayer()

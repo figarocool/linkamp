@@ -19,6 +19,7 @@
 #include "qtmultimediaglobal.h"
 
 #include <QObject>
+#include <QUrl>
 
 QT_BEGIN_NAMESPACE
 
@@ -47,7 +48,15 @@ public:
     void start(QIODevice *stream, const QString &mimeType = QString());
     void abort();
 
+    struct ParsedEntry {
+        ParsedEntry() = default;
+        ParsedEntry(const QUrl &u, const QMediaMetaData &m = {}) : url(u), metadata(m) {}
+        QUrl url;
+        QMediaMetaData metadata;
+    };
+
     QList<QUrl> playlist;
+    QList<ParsedEntry> entries;
 
 signals:
     void newItem(const QVariant &content);

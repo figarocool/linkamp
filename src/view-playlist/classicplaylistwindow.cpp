@@ -199,8 +199,9 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         if (title.isEmpty())
             title = m_playlist->media(row).fileName();
         const QString artist = metadata.value(QMediaMetaData::AlbumArtist).toString();
-        if (!artist.isEmpty())
-            title = artist + QStringLiteral(" - ") + title;
+        const QString author = artist.isEmpty() ? metadata.value(QMediaMetaData::Author).toString() : artist;
+        if (!author.isEmpty())
+            title = author + QStringLiteral(" - ") + title;
 
         const QString track = QStringLiteral("%1.").arg(row + 1, 2, 10, QLatin1Char('0'));
         QString duration;

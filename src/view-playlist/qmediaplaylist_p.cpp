@@ -22,7 +22,16 @@ void QMediaPlaylistPrivate::loadFailed(QMediaPlaylist::Error error, const QStrin
 
 void QMediaPlaylistPrivate::loadFinished()
 {
-    q_ptr->addMedia(parser->playlist);
+    if (!parser->entries.isEmpty()) {
+        for (const auto &entry : std::as_const(parser->entries)) {
+            if (!entry.metadata.isEmpty())
+                q_ptr->addMedia(entry.url, entry.metadata);
+            else
+                q_ptr->addMedia(entry.url);
+        }
+    } else {
+        q_ptr->addMedia(parser->playlist);
+    }
 
     emit q_ptr->loaded();
 }

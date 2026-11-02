@@ -35,9 +35,30 @@ public:
 
     ~QM3uPlaylistWriter() { delete m_textStream; }
 
-    bool writeItem(const QUrl &item)
+    bool writeHeader()
     {
-        *m_textStream << item.toString() << Qt::endl;
+        *m_textStream << "#EXTM3U" << Qt::endl;
+        return true;
+    }
+
+    bool writeItem(const QUrl &item, const QMediaMetaData &meta = {})
+    {
+        QString title = meta.value(QMediaMetaData::Title).toString().trimmed();
+        QString artist = meta.value(QMediaMetaData::AlbumArtist).toString().trimmed();
+        if (artist.isEmpty())
+            artist = meta.value(QMediaMetaData::Author).toString().trimmed();
+
+        qint64 durationMs = meta.value(QMediaMetaData::Duration).toLongLong();
+        int durationSec = durationMs > 0 ? static_cast<int>(durationMs / 1000) : -1;
+
+        if (!title.isEmpty()) {
+            QString desc = artist.isEmpty() ? title : (artist + QStringLiteral(" - ") + title);
+            *m_textStream << "#EXTINF:" << durationSec << "," << desc << Qt::endl;
+        }
+        if (item.isLocalFile())
+            *m_textStream << item.toLocalFile() << Qt::endl;
+        else
+            *m_textStream << item.toString() << Qt::endl;
         return true;
     }
 
@@ -744,8 +765,11 @@ bool QMediaPlaylist::save(QIODevice *device, const char *format) const
         return false;
 
     QM3uPlaylistWriter writer(device);
-    for (const auto &entry : d->playlist)
-        writer.writeItem(entry);
+    writer.writeHeader();
+    for (int i = 0; i < d->playlist.size(); ++i) {
+        const QUrl &entry = d->playlist.at(i);
+        writer.writeItem(entry, mediaMetadata(i));
+    }
     return true;
 }
 

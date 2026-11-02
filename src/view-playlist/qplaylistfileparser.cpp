@@ -113,6 +113,7 @@ public:
                                             .trimmed()
                                             .toString()
                                             .replace(QLatin1String("--"), QLatin1String("-"));
+                            m_extraInfo[QMediaMetaData::AlbumArtist] = m_extraInfo[QMediaMetaData::Author];
                             m_extraInfo[QMediaMetaData::Title] =
                                     lineView.mid(titleStart + 1)
                                             .trimmed()
@@ -134,6 +135,7 @@ public:
             QUrl url = expandToFullPath(root, line);
             m_extraInfo[QMediaMetaData::Url] = url;
             m_parent->playlist.append(url);
+            m_parent->entries.append({url, m_extraInfo});
             newItemFound(QVariant::fromValue(m_extraInfo));
             m_extraInfo.clear();
         }
@@ -218,6 +220,7 @@ public:
 
         QUrl path = expandToFullPath(root, value);
         m_parent->playlist.append(path);
+        m_parent->entries.append({path, QMediaMetaData{}});
         newItemFound(path);
 
         return true;
@@ -503,6 +506,7 @@ void QPlaylistFileParser::start(QIODevice *stream, const QString &mimeType)
     }
 
     playlist.clear();
+    entries.clear();
     d->reset();
     d->m_mimeType = mimeType;
     d->m_stream = stream;
@@ -553,6 +557,7 @@ void QPlaylistFileParser::abort()
         disconnect(d->m_stream, SIGNAL(readyRead()), this, SLOT(handleData()));
 
     playlist.clear();
+    entries.clear();
 }
 
 void QPlaylistFileParser::handleData()

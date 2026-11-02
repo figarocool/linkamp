@@ -5,6 +5,7 @@
 #define QMEDIAPLAYLIST_H
 
 #include <QObject>
+#include <QUrl>
 #include <QMediaMetaData>
 
 QT_BEGIN_NAMESPACE
