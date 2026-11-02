@@ -1,6 +1,6 @@
 # Aggiungi a Linkamp — estensione Firefox
 
-L'estensione aggiunge **♫ Linkamp** accanto al controllo Mi piace nelle pagine video YouTube e invia il link alla playlist tramite `linkamp://`.
+L'estensione aggiunge **♫ Linkamp** accanto al controllo Mi piace nelle pagine video YouTube, mette in pausa l'avvio automatico e invia il link alla playlist tramite `linkamp://`. La riproduzione manuale dal player resta disponibile.
 
 ## Caricamento in Firefox
 

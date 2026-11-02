@@ -80,7 +80,7 @@ This local build accepts YouTube URLs from the command line or the playlist's **
 ./start.sh 'https://youtu.be/S_gJpgFa6m0'
 ```
 
-Linkamp legge il titolo e aggiunge l'URL della pagina alla playlist. `yt-dlp` risolve l'audio solo quando selezioni il brano, poi lo riproduce in streaming. L'audio viene bufferizzato per la riproduzione, senza salvare MP3 o altri file. Selezionare il brano successivo interrompe lo stream corrente.
+Linkamp legge il titolo e aggiunge l'URL della pagina alla playlist. `yt-dlp` risolve l'audio solo quando selezioni il brano, poi lo riproduce in streaming. L'audio viene bufferizzato per la riproduzione, senza salvare MP3 o altri file. Selezionare il brano successivo interrompe lo stream corrente. Le estensioni browser mettono in pausa l'autoplay di YouTube, lasciando disponibile il pulsante Play del sito.
 
 Le estensioni sono in [`chrome-extension/`](chrome-extension/README.md) per Chrome/Chromium e [`firefox-extension/`](firefox-extension/README.md) per Firefox. Entrambe aggiungono **♫ Linkamp** accanto a Mi piace e passano il link tramite lo schema Linux `linkamp://`.
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Aggiungi a Linkamp",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "description": "Aggiunge a Linkamp il video YouTube aperto, senza scaricare l'audio.",
   "browser_specific_settings": {
     "gecko": {
@@ -10,6 +10,15 @@
     }
   },
   "content_scripts": [
+    {
+      "matches": [
+        "https://youtube.com/*",
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": ["autoplay-guard.js"],
+      "run_at": "document_start"
+    },
     {
       "matches": [
         "https://youtube.com/*",
