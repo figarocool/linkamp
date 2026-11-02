@@ -1,5 +1,6 @@
 (() => {
   const BUTTON_ID = "linkamp-youtube-add-button";
+  let retryTimer = null;
 
   function isVideoPage() {
     const path = window.location.pathname;
@@ -7,13 +8,13 @@
     return (path === "/watch" && query.has("v")) || path.startsWith("/shorts/");
   }
 
-  function findLikeControl() {
-    const segmented = document.querySelector("ytd-segmented-like-dislike-button-renderer");
+  function findLikeControl(container) {
+    const segmented = container.querySelector("ytd-segmented-like-dislike-button-renderer");
     if (segmented) {
       return segmented;
     }
 
-    const candidates = document.querySelectorAll(
+    const candidates = container.querySelectorAll(
       "ytd-toggle-button-renderer, button[aria-label], yt-button-view-model"
     );
     for (const candidate of candidates) {
@@ -28,72 +29,117 @@
     return null;
   }
 
+  function findLikePlacement() {
+    const metadata = document.querySelector("ytd-watch-metadata");
+    const actionRows = metadata
+      ? metadata.querySelectorAll("#top-level-buttons-computed")
+      : [];
+    for (const actionRow of actionRows) {
+      const likeControl = findLikeControl(actionRow) || actionRow.firstElementChild;
+      if (likeControl) {
+        return { actionRow, likeControl };
+      }
+    }
+
+    const actionContainer = metadata?.querySelector("#actions-inner, #actions, ytd-menu-renderer");
+    if (actionContainer) {
+      const actionRow = actionContainer.querySelector("#top-level-buttons-computed") || actionContainer;
+      const likeControl = findLikeControl(actionContainer) || actionRow.firstElementChild;
+      if (likeControl) {
+        return { actionRow, likeControl };
+      }
+    }
+
+    for (const row of document.querySelectorAll("#top-level-buttons-computed")) {
+      const likeControl = findLikeControl(row);
+      if (likeControl) {
+        return { actionRow: row, likeControl };
+      }
+    }
+    return null;
+  }
+
   function ensureButton() {
     let button = document.getElementById(BUTTON_ID);
     if (!isVideoPage()) {
       button?.remove();
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
       return;
     }
 
-    const likeControl = findLikeControl();
-    if (!likeControl) {
+    const placement = findLikePlacement();
+    if (!placement) {
       button?.remove();
+      if (!retryTimer) {
+        retryTimer = setTimeout(() => {
+          retryTimer = null;
+          ensureButton();
+        }, 500);
+      }
       return;
+    }
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
     }
 
     if (!button) {
       button = document.createElement("button");
       button.id = BUTTON_ID;
       button.type = "button";
-      button.textContent = "♫  Linkamp";
-      button.title = "Aggiungi questo video alla playlist Linkamp (solo audio in streaming)";
-      button.setAttribute("aria-label", "Aggiungi a Linkamp");
-      button.style.cssText = [
-        "appearance:none",
-        "display:inline-flex",
-        "align-items:center",
-        "justify-content:center",
-        "height:36px",
-        "margin-left:8px",
-        "padding:0 14px",
-        "border:0",
-        "border-radius:18px",
-        "background:#c4302b",
-        "color:#fff",
-        "font:500 14px Roboto,Arial,sans-serif",
-        "white-space:nowrap",
-        "cursor:pointer"
-      ].join(";");
       button.addEventListener("click", () => {
         const appUrl = `linkamp://add?url=${encodeURIComponent(window.location.href)}`;
         window.location.href = appUrl;
       });
     }
 
-    const row = likeControl.closest("#top-level-buttons-computed")
-      || likeControl.closest("ytd-menu-renderer")?.querySelector("#top-level-buttons-computed")
-      || likeControl.parentElement;
-    if (!row) {
-      button.remove();
-      return;
-    }
+    button.textContent = "♫  Linkamp";
+    button.title = "Aggiungi questo video alla playlist Linkamp (solo audio in streaming)";
+    button.setAttribute("aria-label", "Aggiungi a Linkamp");
+    button.style.cssText = [
+      "appearance:none",
+      "display:inline-flex",
+      "align-items:center",
+      "justify-content:center",
+      "height:36px",
+      "flex-shrink:0",
+      "margin-left:8px",
+      "padding:0 14px",
+      "border:0",
+      "border-radius:18px",
+      "background:#c4302b",
+      "color:#fff",
+      "font:500 14px Roboto,Arial,sans-serif",
+      "white-space:nowrap",
+      "cursor:pointer"
+    ].join(";");
 
+    const { actionRow, likeControl } = placement;
     let rowControl = likeControl;
-    while (rowControl.parentElement && rowControl.parentElement !== row) {
+    while (rowControl.parentElement && rowControl.parentElement !== actionRow) {
       rowControl = rowControl.parentElement;
     }
-    if (rowControl.parentElement !== row) {
+    if (rowControl.parentElement !== actionRow) {
       button.remove();
       return;
     }
-    if (button.parentElement !== row || button.previousElementSibling !== rowControl) {
+    if (button.parentElement !== actionRow || button.previousElementSibling !== rowControl) {
       rowControl.insertAdjacentElement("afterend", button);
     }
     button.hidden = false;
   }
 
   ensureButton();
-  document.addEventListener("yt-navigate-finish", ensureButton);
+  document.addEventListener("yt-navigate-finish", () => {
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+    ensureButton();
+  });
   new MutationObserver(ensureButton).observe(document.documentElement, {
     childList: true,
     subtree: true

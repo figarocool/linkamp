@@ -1,6 +1,6 @@
 # Aggiungi a Linkamp — estensione Chrome/Chromium
 
-L'estensione aggiunge il pulsante rosso **♫ Linkamp** accanto al controllo Mi piace sulle pagine video YouTube. Facendo clic, invia il link a Linkamp tramite lo schema locale `linkamp://`.
+L'estensione aggiunge il pulsante rosso **♫ Linkamp** accanto al controllo Mi piace sulle pagine video YouTube. Facendo clic, invia il link a Linkamp tramite lo schema locale `linkamp://`. Se hai già caricato l'estensione, premi **Ricarica** nella scheda `chrome://extensions/` dopo un aggiornamento.
 
 ## Installazione
 

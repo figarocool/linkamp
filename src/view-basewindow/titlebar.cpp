@@ -104,6 +104,12 @@ void TitleBar::scale()
 void TitleBar::paintEvent(QPaintEvent *event)
 {
     if (!m_classicEqualizerStyle) {
+        const QPixmap sprite(QStringLiteral(":/assets/classic-titlebar.png"));
+        if (!sprite.isNull()) {
+            QPainter painter(this);
+            painter.drawPixmap(rect(), sprite, sprite.rect());
+            return;
+        }
         QWidget::paintEvent(event);
         return;
     }
