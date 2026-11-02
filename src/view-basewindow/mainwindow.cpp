@@ -648,12 +648,32 @@ void MainWindow::addYouTubeUrl(const QString &rawUrl)
         return;
     }
 
+    const QString videoId = youtubeVideoId(url);
+    for (int index = 0; index < m_playlist->mediaCount(); ++index) {
+        const QUrl existingUrl = m_playlist->media(index);
+        if ((!videoId.isEmpty() && youtubeVideoId(existingUrl) == videoId)
+            || (videoId.isEmpty() && existingUrl == url)) {
+            if (playlist) {
+                if (!playlist->isVisible())
+                    showPlaylist();
+                playlist->raise();
+                playlist->activateWindow();
+            }
+            return;
+        }
+    }
+    if (!videoId.isEmpty() && m_pendingYouTubeIds.contains(videoId))
+        return;
+
     const QString ytDlp = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
     if (ytDlp.isEmpty()) {
         QMessageBox::warning(this, tr("yt-dlp non trovato"),
                              tr("Installa yt-dlp nell'ambiente Python di Linkamp e riprova."));
         return;
     }
+
+    if (!videoId.isEmpty())
+        m_pendingYouTubeIds.insert(videoId);
 
     auto *progress = new QProgressDialog(tr("Recupero titolo e informazioni da YouTube…"),
                                          tr("Annulla"), 0, 0, this);
@@ -665,19 +685,21 @@ void MainWindow::addYouTubeUrl(const QString &rawUrl)
     auto *process = new QProcess(this);
     connect(progress, &QProgressDialog::canceled, process, &QProcess::kill);
     connect(process, &QProcess::errorOccurred, this,
-            [this, process, progress](QProcess::ProcessError error) {
+            [this, process, progress, videoId](QProcess::ProcessError error) {
         if (error != QProcess::FailedToStart)
             return;
+        m_pendingYouTubeIds.remove(videoId);
         progress->close();
         progress->deleteLater();
         QMessageBox::warning(this, tr("Errore yt-dlp"), tr("Impossibile avviare yt-dlp."));
         process->deleteLater();
     });
     connect(process, &QProcess::finished, this,
-            [this, process, progress, url](int exitCode, QProcess::ExitStatus) {
+            [this, process, progress, url, videoId](int exitCode, QProcess::ExitStatus) {
         const QByteArray output = process->readAllStandardOutput();
         const QString errorOutput = QString::fromUtf8(process->readAllStandardError()).trimmed();
         const bool cancelled = progress->wasCanceled();
+        m_pendingYouTubeIds.remove(videoId);
         progress->close();
         progress->deleteLater();
         process->deleteLater();

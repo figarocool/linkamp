@@ -18,5 +18,6 @@ bool isAudioFile(QString path);
 bool isPlaylist(const QUrl &url); // Check for ".m3u" playlists.
 
 bool isYouTubeUrl(const QUrl &url);
+QString youtubeVideoId(const QUrl &url);
 
 #endif // UTIL_H

@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QStackedLayout>
 #include <QProcess>
+#include <QSet>
 #include "audiosourcecdnative.h"
 #include "audiosourcecoordinator.h"
 #include "audiosourcefile.h"
@@ -60,6 +61,7 @@ protected:
 private:
     QMediaPlaylist *m_playlist = nullptr;
     PlaylistModel *m_playlistModel = nullptr;
+    QSet<QString> m_pendingYouTubeIds;
     QDialog *m_equalizerWindow = nullptr;
     QWidget *m_playerBodyContainer = nullptr;
     bool m_windowShaded = false;

@@ -82,7 +82,7 @@ This local build accepts YouTube URLs from the command line or the playlist's **
 
 Linkamp legge il titolo e aggiunge l'URL della pagina alla playlist. `yt-dlp` risolve l'audio solo quando selezioni il brano, poi lo riproduce in streaming. L'audio viene bufferizzato per la riproduzione, senza salvare MP3 o altri file. Selezionare il brano successivo interrompe lo stream corrente.
 
-Il pulsante Chrome/Chromium **Aggiungi a Linkamp** si trova in [`chrome-extension/`](chrome-extension/README.md). Carica la cartella come estensione non pacchettizzata da `chrome://extensions/`; lo schema Linux `linkamp://` apre il player e passa il link alla playlist.
+Le estensioni sono in [`chrome-extension/`](chrome-extension/README.md) per Chrome/Chromium e [`firefox-extension/`](firefox-extension/README.md) per Firefox. Entrambe aggiungono **♫ Linkamp** accanto a Mi piace e passano il link tramite lo schema Linux `linkamp://`.
 
 ### Building a Debian package
 

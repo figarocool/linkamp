@@ -378,8 +378,18 @@ void AudioSourceFile::addToPlaylist(const QList<QUrl> &urls)
 
 void AudioSourceFile::addYouTubeToPlaylist(const QUrl &url, const QMediaMetaData &metadata)
 {
-    if (isYouTubeUrl(url))
-        m_playlist->addMedia(url, metadata);
+    if (!isYouTubeUrl(url))
+        return;
+
+    const QString videoId = youtubeVideoId(url);
+    for (int index = 0; index < m_playlist->mediaCount(); ++index) {
+        const QUrl existingUrl = m_playlist->media(index);
+        if ((!videoId.isEmpty() && youtubeVideoId(existingUrl) == videoId)
+            || (videoId.isEmpty() && existingUrl == url)) {
+            return;
+        }
+    }
+    m_playlist->addMedia(url, metadata);
 }
 
 QMediaMetaData AudioSourceFile::currentMetaData() const

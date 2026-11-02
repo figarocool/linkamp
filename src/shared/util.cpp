@@ -3,6 +3,7 @@
 #include "qfileinfo.h"
 
 #include <QRegularExpression>
+#include <QUrlQuery>
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
 #include <taglib/tpropertymap.h>
@@ -111,4 +112,29 @@ bool isYouTubeUrl(const QUrl &url)
            || host.endsWith(QLatin1String(".youtube.com"))
            || host == QLatin1String("youtube-nocookie.com")
            || host.endsWith(QLatin1String(".youtube-nocookie.com"));
+}
+
+QString youtubeVideoId(const QUrl &url)
+{
+    if (!isYouTubeUrl(url))
+        return {};
+
+    const QString host = url.host().toLower();
+    const QStringList pathParts = url.path(QUrl::FullyDecoded).split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    if (host == QLatin1String("youtu.be"))
+        return pathParts.value(0);
+
+    const QUrlQuery query(url);
+    const QString queryId = query.queryItemValue(QLatin1String("v"), QUrl::FullyDecoded).trimmed();
+    if (!queryId.isEmpty())
+        return queryId;
+
+    if (pathParts.size() >= 2
+        && (pathParts.at(0) == QLatin1String("shorts")
+            || pathParts.at(0) == QLatin1String("embed")
+            || pathParts.at(0) == QLatin1String("live")
+            || pathParts.at(0) == QLatin1String("v"))) {
+        return pathParts.at(1);
+    }
+    return {};
 }
