@@ -134,10 +134,10 @@
               <widget class="QLabel" name="progressTimeLabel">
                <property name="geometry">
                 <rect>
-                 <x>39</x>
-                 <y>3</y>
-                 <width>50</width>
-                 <height>20</height>
+                  <x>32</x>
+                  <y>5</y>
+                  <width>64</width>
+                  <height>16</height>
                 </rect>
                </property>
                <property name="palette">
@@ -268,7 +268,7 @@
                <property name="styleSheet">
                 <string notr="true">#progressTimeLabel {
 	font-family: &quot;bignumbers&quot;;
-	letter-spacing: 8px;
+	letter-spacing: 2px;
 	color: #00f800;
 }</string>
                </property>

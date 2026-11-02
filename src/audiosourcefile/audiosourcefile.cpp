@@ -397,6 +397,8 @@ QMediaMetaData AudioSourceFile::currentMetaData() const
     QMediaMetaData metadata = m_player->metaData();
     const int queueIndex = m_playlist->currentQueueIndex();
     const QUrl media = m_playlist->queueMedia(queueIndex);
+    if (queueIndex >= 0)
+        metadata.insert(QMediaMetaData::TrackNumber, queueIndex + 1);
     if (!isYouTubeUrl(media))
         return metadata;
 

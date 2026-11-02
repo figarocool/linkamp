@@ -26,6 +26,24 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     // Setup UI
     ui->setupUi(this);
     scale();
+    QFont tickerFont = ui->songInfoLabel->font();
+    tickerFont.setFamily(QStringLiteral("DejaVu Sans Mono"));
+    tickerFont.setPixelSize(6 * UI_SCALE);
+    tickerFont.setBold(true);
+    tickerFont.setStyleStrategy(QFont::NoAntialias);
+    ui->songInfoLabel->setFont(tickerFont);
+    const auto setPixelLabelFont = [](QLabel *label) {
+        QFont font = label->font();
+        font.setFamily(QStringLiteral("DejaVu Sans Mono"));
+        font.setPixelSize(6 * UI_SCALE);
+        font.setBold(true);
+        font.setStyleStrategy(QFont::NoAntialias);
+        label->setFont(font);
+    };
+    for (QLabel *label : {ui->kbpsLabel, ui->kbpsValueLabel, ui->kHzLabel,
+                          ui->khzValueLabel, ui->monoLabel, ui->stereoLabel}) {
+        setPixelLabelFont(label);
+    }
 
     controlButtons = ctlBtns;
 
@@ -295,23 +313,22 @@ void PlayerView::setSpectrumData(const QByteArray& data, QAudioFormat format)
 void PlayerView::setMetadata(QMediaMetaData metadata)
 {
     // Generate track info string
-    QString artist = metadata.value(QMediaMetaData::AlbumArtist).toString().toUpper();
-    QString album = metadata.value(QMediaMetaData::AlbumTitle).toString().toUpper();
-    QString title = metadata.value(QMediaMetaData::Title).toString().toUpper();
+    const QString title = metadata.value(QMediaMetaData::Title).toString();
 
     //  Calculate duration
     qint64 ms = metadata.value(QMediaMetaData::Duration).toLongLong();
     qint64 duration = ms/1000;
-    QTime totalTime((duration / 3600) % 60, (duration / 60) % 60, duration % 60,
-                    (duration * 1000) % 1000);
     QString durationStr = formatDuration(ms);
 
-    QString trackInfo = "";
+    QString trackInfo;
+    const int trackNumber = metadata.value(QMediaMetaData::TrackNumber).toInt();
+    if (trackNumber > 0)
+        trackInfo.append(QStringLiteral("%1. ").arg(trackNumber));
 
-    if(artist.length()) trackInfo.append(QString("%1 - ").arg(artist));
-    if(album.length()) trackInfo.append(QString("%1 - ").arg(album));
-    if(title.length()) trackInfo.append(title);
-    if(totalTime > QTime(0, 0, 0)) trackInfo.append(QString(" (%1)").arg(durationStr));
+    if (!title.isEmpty())
+        trackInfo.append(title);
+    if (duration > 0)
+        trackInfo.append(QStringLiteral(" (%1)").arg(durationStr));
 
     setTrackInfo(trackInfo);
 
@@ -407,14 +424,10 @@ void PlayerView::clearMessage()
 
 void PlayerView::updateDurationInfo(qint64 currentInfo)
 {
-    QString tStr, tDisplayStr;
-    if (currentInfo || m_duration) {
-        tStr = formatDuration(currentInfo) + " / " + formatDuration(m_duration);
-
-        QTime currentTime((currentInfo / 3600) % 60, (currentInfo / 60) % 60, currentInfo % 60,
-                          (currentInfo * 1000) % 1000);
-        tDisplayStr = currentTime.toString("m ss");
-    }
+    const qint64 seconds = std::max<qint64>(0, currentInfo);
+    const QString minutes = QString::number(seconds / 60).rightJustified(2, QLatin1Char('0'));
+    const QString remainder = QString::number(seconds % 60).rightJustified(2, QLatin1Char('0'));
+    const QString tDisplayStr = minutes + QLatin1Char(':') + remainder;
     ui->progressTimeLabel->setText(tDisplayStr);
 }
 
