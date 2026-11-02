@@ -1,6 +1,7 @@
 (() => {
   const BUTTON_ID = "linkamp-youtube-add-button";
   let retryTimer = null;
+  let ensureScheduled = false;
 
   function isVideoPage() {
     const path = window.location.pathname;
@@ -96,10 +97,17 @@
       });
     }
 
-    button.textContent = "♫  Linkamp";
-    button.title = "Aggiungi questo video alla playlist Linkamp (solo audio in streaming)";
-    button.setAttribute("aria-label", "Aggiungi a Linkamp");
-    button.style.cssText = [
+    if (button.textContent !== "♫  Linkamp") {
+      button.textContent = "♫  Linkamp";
+    }
+    const buttonTitle = "Aggiungi questo video alla playlist Linkamp (solo audio in streaming)";
+    if (button.title !== buttonTitle) {
+      button.title = buttonTitle;
+    }
+    if (button.getAttribute("aria-label") !== "Aggiungi a Linkamp") {
+      button.setAttribute("aria-label", "Aggiungi a Linkamp");
+    }
+    const buttonStyle = [
       "appearance:none",
       "display:inline-flex",
       "align-items:center",
@@ -116,6 +124,10 @@
       "white-space:nowrap",
       "cursor:pointer"
     ].join(";");
+    if (button.dataset.linkampStyled !== "true") {
+      button.style.cssText = buttonStyle;
+      button.dataset.linkampStyled = "true";
+    }
 
     const { actionRow, likeControl } = placement;
     let rowControl = likeControl;
@@ -132,15 +144,26 @@
     button.hidden = false;
   }
 
+  function scheduleEnsureButton() {
+    if (ensureScheduled) {
+      return;
+    }
+    ensureScheduled = true;
+    requestAnimationFrame(() => {
+      ensureScheduled = false;
+      ensureButton();
+    });
+  }
+
   ensureButton();
   document.addEventListener("yt-navigate-finish", () => {
     if (retryTimer) {
       clearTimeout(retryTimer);
       retryTimer = null;
     }
-    ensureButton();
+    scheduleEnsureButton();
   });
-  new MutationObserver(ensureButton).observe(document.documentElement, {
+  new MutationObserver(scheduleEnsureButton).observe(document.documentElement, {
     childList: true,
     subtree: true
   });
