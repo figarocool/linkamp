@@ -19,7 +19,7 @@ QSlider::groove:horizontal {
 }
 
 QSlider::sub-page:horizontal {
-        background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #9f161b, stop: 1 #e11f26);
+        background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #7a4515, stop: 1 #9b5d21);
         border-top: 4px solid #161623;
         border-left: 4px solid #161623;
         border-bottom: 4px solid #7d7d92;

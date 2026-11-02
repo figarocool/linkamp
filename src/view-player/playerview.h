@@ -59,6 +59,7 @@ signals:
     void balanceDragStarted();
     void balanceDragFinished(int balance);
     void positionChanged(qint64 progress);
+    void playbackPositionChanged(qint64 progress);
     void eqClicked();
     void plClicked();
     void previousClicked();
@@ -87,6 +88,7 @@ private:
     bool repeatEnabled = false;
     bool m_isUserSeeking = false;
     bool m_deferredSeekEnabled = false;
+    MediaPlayer::PlaybackState m_playbackState = MediaPlayer::StoppedState;
 
     void updateDurationInfo(qint64 currentInfo);
     void setTrackInfo(const QString &info);

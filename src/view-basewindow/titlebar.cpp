@@ -12,11 +12,14 @@ TitleBar::TitleBar(QWidget *parent) :
 {
     ui->setupUi(this);
     scale();
-    setStyleSheet("TitleBar { border-image: url(:assets/classic-titlebar.png); background: transparent; }");
+    setStyleSheet("TitleBar { background: transparent; }");
     ui->lineLT->hide();
     ui->lineLB->hide();
     ui->lineRT->hide();
     ui->lineRB->hide();
+    ui->decorationL->hide();
+    ui->decorationR->hide();
+    ui->windowTitle->hide();
     connect(ui->menuButton, &QPushButton::clicked, this, &TitleBar::menuClicked);
     connect(ui->shadeButton, &QPushButton::clicked, this, &TitleBar::shadeClicked);
     connect(ui->closeButton, &QPushButton::clicked, window(), &QWidget::close);
@@ -101,13 +104,33 @@ void TitleBar::scale()
     ui->horizontalSpacer_4->changeSize(sh4.width()*UI_SCALE, sh4.height(), sp4.horizontalPolicy(), sp4.verticalPolicy());
 }
 
+void TitleBar::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    if (!m_classicEqualizerStyle) {
+        ui->menuButton->setGeometry(6 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
+        ui->minimizeButton->setGeometry(244 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
+        ui->shadeButton->setGeometry(254 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
+        ui->closeButton->setGeometry(264 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
+    }
+}
+
+void TitleBar::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::ActivationChange) {
+        update();
+    }
+    QWidget::changeEvent(event);
+}
+
 void TitleBar::paintEvent(QPaintEvent *event)
 {
     if (!m_classicEqualizerStyle) {
         const QPixmap sprite(QStringLiteral(":/assets/classic-titlebar.png"));
         if (!sprite.isNull()) {
             QPainter painter(this);
-            painter.drawPixmap(rect(), sprite, sprite.rect());
+            const int titleY = (window() && window()->isActiveWindow()) ? 0 : 14;
+            painter.drawPixmap(rect(), sprite, QRect(0, titleY, 275, 14));
             return;
         }
         QWidget::paintEvent(event);

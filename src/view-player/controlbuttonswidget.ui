@@ -127,13 +127,13 @@
        <widget class="QPushButton" name="backButton">
         <property name="minimumSize">
          <size>
-          <width>22</width>
+          <width>23</width>
           <height>18</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>22</width>
+          <width>23</width>
           <height>18</height>
          </size>
         </property>
@@ -158,13 +158,13 @@
        <widget class="QPushButton" name="playButton">
         <property name="minimumSize">
          <size>
-          <width>22</width>
+          <width>23</width>
           <height>18</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>22</width>
+          <width>23</width>
           <height>18</height>
          </size>
         </property>
@@ -189,13 +189,13 @@
        <widget class="QPushButton" name="pauseButton">
         <property name="minimumSize">
          <size>
-          <width>22</width>
+          <width>23</width>
           <height>18</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>22</width>
+          <width>23</width>
           <height>18</height>
          </size>
         </property>
@@ -220,13 +220,13 @@
        <widget class="QPushButton" name="stopButton">
         <property name="minimumSize">
          <size>
-          <width>22</width>
+          <width>23</width>
           <height>18</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>22</width>
+          <width>23</width>
           <height>18</height>
          </size>
         </property>
@@ -284,7 +284,7 @@
          <enum>Qt::Horizontal</enum>
         </property>
         <property name="sizeType">
-         <enum>QSizePolicy::MinimumExpanding</enum>
+         <enum>QSizePolicy::Fixed</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -331,7 +331,7 @@
          <enum>Qt::Horizontal</enum>
         </property>
         <property name="sizeType">
-         <enum>QSizePolicy::MinimumExpanding</enum>
+         <enum>QSizePolicy::Fixed</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>

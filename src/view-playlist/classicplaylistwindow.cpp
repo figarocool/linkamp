@@ -25,6 +25,103 @@ constexpr int kWindowHeight = 116;
 constexpr int kListTop = 21;
 constexpr int kListBottomInset = 38;
 constexpr int kRowHeight = 12;
+
+static void renderBitmapTextPl(QPainter &p, const QString &text, int startX, int startY, bool selected)
+{
+    static const QPixmap normalBmp(QStringLiteral(":/assets/classic-text.png"));
+    static QPixmap selectedBmp;
+    if (selectedBmp.isNull() && !normalBmp.isNull()) {
+        QImage img = normalBmp.toImage().convertToFormat(QImage::Format_RGB32);
+        for (int y = 0; y < img.height(); ++y) {
+            QRgb *line = reinterpret_cast<QRgb*>(img.scanLine(y));
+            for (int x = 0; x < img.width(); ++x) {
+                if (qGreen(line[x]) > 50 || qRed(line[x]) > 50 || qBlue(line[x]) > 50) {
+                    line[x] = qRgb(0, 0, 0); // glyph is black
+                } else {
+                    line[x] = qRgb(0, 190, 0); // background is green (#00be00)
+                }
+            }
+        }
+        selectedBmp = QPixmap::fromImage(img);
+    }
+    const QPixmap &fontBmp = selected ? selectedBmp : normalBmp;
+    if (fontBmp.isNull()) return;
+
+    int curX = startX;
+    for (int i = 0; i < text.length(); ++i) {
+        const QChar ch = text[i];
+        int col = -1;
+        int row = -1;
+
+        if (ch >= QLatin1Char('A') && ch <= QLatin1Char('Z')) {
+            row = 0;
+            col = ch.unicode() - 'A';
+        } else if (ch >= QLatin1Char('a') && ch <= QLatin1Char('z')) {
+            row = 0;
+            col = ch.unicode() - 'a';
+        } else if (ch == QLatin1Char('"')) {
+            row = 0; col = 26;
+        } else if (ch == QLatin1Char('@')) {
+            row = 0; col = 27;
+        } else if (ch >= QLatin1Char('0') && ch <= QLatin1Char('9')) {
+            row = 1;
+            col = ch.unicode() - '0';
+        } else if (ch == QLatin1Char('.')) {
+            row = 1; col = 11;
+        } else if (ch == QLatin1Char(':')) {
+            row = 1; col = 12;
+        } else if (ch == QLatin1Char('(')) {
+            row = 1; col = 13;
+        } else if (ch == QLatin1Char(')')) {
+            row = 1; col = 14;
+        } else if (ch == QLatin1Char('-')) {
+            row = 1; col = 15;
+        } else if (ch == QLatin1Char('\'') || ch == QLatin1Char('`')) {
+            row = 1; col = 16;
+        } else if (ch == QLatin1Char('!')) {
+            row = 1; col = 17;
+        } else if (ch == QLatin1Char('_')) {
+            row = 1; col = 18;
+        } else if (ch == QLatin1Char('+')) {
+            row = 1; col = 19;
+        } else if (ch == QLatin1Char('\\')) {
+            row = 1; col = 20;
+        } else if (ch == QLatin1Char('/')) {
+            row = 1; col = 21;
+        } else if (ch == QLatin1Char('[')) {
+            row = 1; col = 22;
+        } else if (ch == QLatin1Char(']')) {
+            row = 1; col = 23;
+        } else if (ch == QLatin1Char('^')) {
+            row = 1; col = 24;
+        } else if (ch == QLatin1Char('&')) {
+            row = 1; col = 25;
+        } else if (ch == QLatin1Char('%')) {
+            row = 1; col = 26;
+        } else if (ch == QLatin1Char(',')) {
+            row = 1; col = 27;
+        } else if (ch == QLatin1Char('=')) {
+            row = 1; col = 28;
+        } else if (ch == QLatin1Char('$')) {
+            row = 1; col = 29;
+        } else if (ch == QLatin1Char('#')) {
+            row = 1; col = 30;
+        } else if (ch == QLatin1Char(' ')) {
+            if (selected) {
+                p.fillRect(curX, startY, 5, 6, QColor(0, 190, 0));
+            }
+            curX += 5;
+            continue;
+        }
+
+        if (col >= 0 && row >= 0) {
+            p.drawPixmap(curX, startY, fontBmp, col * 5, row * 6, 5, 6);
+        } else if (selected) {
+            p.fillRect(curX, startY, 5, 6, QColor(0, 190, 0));
+        }
+        curX += 5;
+    }
+}
 }
 
 ClassicPlaylistWindow::ClassicPlaylistWindow(QMediaPlaylist *playlist, QWidget *parent)
@@ -40,6 +137,20 @@ ClassicPlaylistWindow::ClassicPlaylistWindow(QMediaPlaylist *playlist, QWidget *
     connect(m_playlist, &QMediaPlaylist::mediaRemoved, this, &ClassicPlaylistWindow::updatePlaylist);
     connect(m_playlist, &QMediaPlaylist::mediaChanged, this, &ClassicPlaylistWindow::updatePlaylist);
     connect(m_playlist, &QMediaPlaylist::currentIndexChanged, this, &ClassicPlaylistWindow::updatePlaylist);
+}
+
+void ClassicPlaylistWindow::setPosition(qint64 position)
+{
+    m_position = position;
+    update();
+}
+
+void ClassicPlaylistWindow::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::ActivationChange) {
+        update();
+    }
+    QDialog::changeEvent(event);
 }
 
 int ClassicPlaylistWindow::rowAt(const QPoint &position) const
@@ -88,37 +199,38 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         return;
     }
 
+    const int titleY = (window() && window()->isActiveWindow()) ? 0 : 21;
     int x = 0;
     int tiles = (width() - 25 - 25 - 100) / 25;
-    blit(x, 0, 25, 20, 0, 0, 25, 20);
+    blit(x, 0, 25, 20, 0, titleY, 25, 20);
     x += 25;
     if (tiles & 1) {
-        blit(x, 0, 12, 20, 127, 0, 25, 20);
+        blit(x, 0, 12, 20, 127, titleY, 25, 20);
         x += 12;
     }
     tiles /= 2;
     while (tiles-- > 0) {
-        blit(x, 0, 25, 20, 127, 0, 25, 20);
+        blit(x, 0, 25, 20, 127, titleY, 25, 20);
         x += 25;
     }
-    blit(x, 0, 100, 20, 26, 0, 100, 20);
+    blit(x, 0, 100, 20, 26, titleY, 100, 20);
     x += 100;
     tiles = (width() - 25 - 25 - 100) / 25;
     if (tiles & 1) {
-        blit(x, 0, 13, 20, 127, 0, 25, 20);
+        blit(x, 0, 13, 20, 127, titleY, 25, 20);
         x += 13;
     }
     tiles /= 2;
     while (tiles-- > 0) {
-        blit(x, 0, 25, 20, 127, 0, 25, 20);
+        blit(x, 0, 25, 20, 127, titleY, 25, 20);
         x += 25;
     }
     const int remainder = (width() - 25 - 25 - 100) % 25;
     if (remainder > 0) {
-        blit(x, 0, remainder, 20, 127, 0, 25, 20);
+        blit(x, 0, remainder, 20, 127, titleY, 25, 20);
         x += remainder;
     }
-    blit(x, 0, 25, 20, 153, 0, 25, 20);
+    blit(x, 0, 25, 20, 153, titleY, 25, 20);
     blit(width() - 11, 3, 9, 9, 167, 3, 9, 9);
     blit(width() - 20, 3, 9, 9, 158, 3, 9, 9);
     const int trackHeight = height() - 20 - 38;
@@ -179,20 +291,17 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
     }
     blit(width() - 15, 20 + thumbY, 8, thumbHeight, 52, 53, 9, 18);
 
-    painter.setRenderHint(QPainter::TextAntialiasing, false);
-    QFont font(QStringLiteral("DejaVu Sans Mono"));
-    font.setPixelSize(8);
-    font.setStyleStrategy(QFont::NoAntialias);
-    painter.setFont(font);
-    const QFontMetrics metrics(font);
     const int end = std::min(m_playlist->mediaCount(), m_firstVisibleRow + visibleRows);
 
     for (int row = m_firstVisibleRow; row < end; ++row) {
         const int y = kListTop + (row - m_firstVisibleRow) * kRowHeight;
         const QRect rowRect(12, y, width() - 32, kRowHeight);
         const bool selected = m_selectedRows.contains(row);
-        if (selected)
-            painter.fillRect(rowRect, QColor(0, 190, 0));
+        if (selected) {
+            painter.fillRect(rowRect, QColor(0, 190, 0)); // Classic green selection highlight
+        } else {
+            painter.fillRect(rowRect, QColor(0, 0, 0)); // Solid black background
+        }
 
         const QMediaMetaData metadata = m_playlist->mediaMetadata(row);
         QString title = metadata.value(QMediaMetaData::Title).toString();
@@ -203,33 +312,40 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         if (!author.isEmpty())
             title = author + QStringLiteral(" - ") + title;
 
-        const QString track = QStringLiteral("%1.").arg(row + 1, 2, 10, QLatin1Char('0'));
+        const QString track = QStringLiteral("%1. ").arg(row + 1);
+        const QString fullTitle = track + title;
+
         QString duration;
         const qint64 durationMs = metadata.value(QMediaMetaData::Duration).toLongLong();
         if (durationMs > 0)
             duration = formatDuration(durationMs);
 
-        const bool current = row == m_playlist->currentIndex();
-        painter.setPen(selected ? Qt::black : (current ? QColor(255, 255, 255) : QColor(0, 248, 0)));
-        const QString prefix = current ? QStringLiteral("▶") : track;
-        painter.drawText(QRect(12, y, 23, kRowHeight), Qt::AlignLeft | Qt::AlignVCenter, prefix);
+        const int durationWidth = duration.isEmpty() ? 0 : duration.length() * 5 + 4;
+        const int maxTextWidth = (width() - 32) - durationWidth - 4;
+        const int textY = y + 3;
 
-        const int durationWidth = duration.isEmpty() ? 0 : metrics.horizontalAdvance(duration) + 4;
-        const QRect titleRect(37, y, width() - 57 - durationWidth, kRowHeight);
         painter.save();
-        painter.setClipRect(titleRect);
-        painter.drawText(titleRect, Qt::AlignLeft | Qt::AlignVCenter, title);
+        painter.setClipRect(QRect(14, y, maxTextWidth, kRowHeight));
+        renderBitmapTextPl(painter, fullTitle, 14, textY, selected);
         painter.restore();
-        if (!duration.isEmpty())
-            painter.drawText(QRect(width() - 20 - durationWidth, y, durationWidth, kRowHeight),
-                             Qt::AlignRight | Qt::AlignVCenter, duration);
+
+        if (!duration.isEmpty()) {
+            const int durX = (width() - 22) - duration.length() * 5;
+            renderBitmapTextPl(painter, duration, durX, textY, selected);
+        }
     }
 
+    const QString currentTime = formatDuration(m_position);
     const QString totalTime = formatDuration(m_playlist->totalDuration());
-    painter.setFont(QFont(QStringLiteral("DejaVu Sans Mono"), 6, QFont::Bold));
-    painter.setPen(QColor("#ffe000"));
-    painter.drawText(QRect(width() - 94 + 8, height() - 15, 78, 8),
-                     Qt::AlignLeft | Qt::AlignVCenter, totalTime);
+    const QString comboTime = currentTime + QLatin1Char('/') + totalTime;
+
+    // Top LCD box (track time / total time): right-aligned inside LCD box
+    const int topLcdX = (width() - 150 + 94) - comboTime.length() * 5;
+    renderBitmapTextPl(painter, comboTime, topLcdX, height() - 28, false);
+
+    // Bottom LCD box (current track time): right-aligned inside LCD box
+    const int botLcdX = (width() - 150 + 94) - currentTime.length() * 5;
+    renderBitmapTextPl(painter, currentTime, botLcdX, height() - 16, false);
 }
 
 void ClassicPlaylistWindow::mousePressEvent(QMouseEvent *event)

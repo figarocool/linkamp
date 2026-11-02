@@ -28,6 +28,7 @@ protected:
 
 private:
     void updateText();
+    void renderBitmapText(QPainter &p, const QString &text, int startX, int startY);
     QString _text;
     QString _separator;
     QStaticText staticText;

@@ -90,22 +90,13 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     // Set volume slider
     ui->volumeSlider->setRange(0, 100);
     QList<QColor> volumeGradientColors{
-        QColor::fromRgb(7,191,0),
-        QColor::fromRgb(28,191,0),
-        QColor::fromRgb(59,191,0),
-        QColor::fromRgb(95,191,0),
-        QColor::fromRgb(132,191,0),
-        QColor::fromRgb(163,191,0),
-        QColor::fromRgb(183,191,0),
-        QColor::fromRgb(191,191,0),
-        QColor::fromRgb(191,183,0),
-        QColor::fromRgb(191,163,0),
-        QColor::fromRgb(191,132,0),
-        QColor::fromRgb(191,95,0),
-        QColor::fromRgb(191,59,0),
-        QColor::fromRgb(191,28,0),
-        QColor::fromRgb(191,7,0),
-        QColor::fromRgb(192,0,0),
+        QColor::fromRgb(107, 59, 18),
+        QColor::fromRgb(125, 70, 22),
+        QColor::fromRgb(138, 79, 25),
+        QColor::fromRgb(155, 93, 33),
+        QColor::fromRgb(165, 100, 36),
+        QColor::fromRgb(175, 108, 38),
+        QColor::fromRgb(184, 112, 40),
     };
     ui->volumeSlider->setGradient(volumeGradientColors, Qt::Horizontal);
     connect(ui->volumeSlider, &QSlider::sliderPressed, this, &PlayerView::volumeDragStarted);
@@ -131,8 +122,15 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     });
     connect(ui->balanceSlider, &QSlider::valueChanged, this, &PlayerView::handleBalanceChanged);
 
-    // Reset time counter
-    ui->progressTimeLabel->setText("");
+    // Reset time counter and labels
+    ui->progressTimeLabel->setText("00:00");
+    ui->kbpsValueLabel->setText("");
+    ui->khzValueLabel->setText("");
+    ui->monoLabel->setText("");
+    ui->stereoLabel->setText("");
+    ui->inputLabel->hide();
+    ui->kbpsLabel->hide();
+    ui->kHzLabel->hide();
 
     // Set play status icon
     setPlaybackState(MediaPlayer::StoppedState);
@@ -243,12 +241,9 @@ void PlayerView::scale()
     QRect scGeo = ui->spectrumContainer->geometry();
     ui->spectrumContainer->setGeometry(scGeo.x()*UI_SCALE, scGeo.y()*UI_SCALE, scGeo.width()*UI_SCALE, scGeo.height()*UI_SCALE);
 
-    QRect ilGeo = ui->inputLabel->geometry();
-    ui->inputLabel->setGeometry(10, 6, ilGeo.width()*UI_SCALE, ilGeo.height()*UI_SCALE);
-    QFont ilFont = ui->inputLabel->font();
-    ilFont.setPointSize(23);
-    ilFont.setFamily("DejaVu Sans Mono");
-    ui->inputLabel->setFont(ilFont);
+    ui->inputLabel->hide();
+    ui->kbpsLabel->hide();
+    ui->kHzLabel->hide();
 }
 
 void PlayerView::setDeferredSeekEnabled(bool enabled)
@@ -261,11 +256,17 @@ void PlayerView::setDeferredSeekEnabled(bool enabled)
 
 void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
 {
+    m_playbackState = state;
     QString imageSrc;
     switch(state) {
     case MediaPlayer::StoppedState:
         if(spectrum) spectrum->stop();
         imageSrc = ":/assets/status_stopped.png";
+        ui->progressTimeLabel->setText("00:00");
+        ui->kbpsValueLabel->setText("");
+        ui->khzValueLabel->setText("");
+        ui->monoLabel->setText("");
+        ui->stereoLabel->setText("");
         break;
     case MediaPlayer::PlayingState:
         if(spectrum) spectrum->play();
@@ -288,6 +289,8 @@ void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
 
 void PlayerView::setPosition(qint64 progress)
 {
+    emit playbackPositionChanged(progress);
+
     if (m_deferredSeekEnabled) {
         if (m_isUserSeeking || ui->posBar->isSliderDown()) {
             return;
@@ -337,22 +340,21 @@ void PlayerView::setMetadata(QMediaMetaData metadata)
     QString codec = metadata.value(QMediaMetaData::Description).toString(); // Using Description as codec
     if(bitrate > 0) {
         bitrate = bitrate/1000;
-        ui->kbpsLabel->setText("kbps");
         ui->kbpsValueLabel->setText(QString::number(bitrate));
     } else if(codec.length()) {
-        // No bitrate, try to use codec
-        ui->kbpsLabel->setText("codec");
         ui->kbpsValueLabel->setText(codec);
     } else {
-        // Keep blank
-        ui->kbpsLabel->setText("kbps");
         ui->kbpsValueLabel->setText("");
     }
-
 
     // Set kHz
     int khz = metadata.value(QMediaMetaData::Comment).toString().toInt()/1000;
     ui->khzValueLabel->setText(khz > 0 ? QString::number(khz) : "");
+
+    // Set stereo indicator
+    ui->stereoLabel->setStyleSheet(QStringLiteral("color: #00e200; font-family: 'Bitstream Vera Sans Mono'; font-size: 5pt; font-weight: bold;"));
+    ui->stereoLabel->setText(QStringLiteral("stereo"));
+    ui->monoLabel->setText("");
 }
 
 void PlayerView::setDuration(qint64 duration)
@@ -424,6 +426,10 @@ void PlayerView::clearMessage()
 
 void PlayerView::updateDurationInfo(qint64 currentInfo)
 {
+    if (m_playbackState == MediaPlayer::StoppedState) {
+        ui->progressTimeLabel->setText("00:00");
+        return;
+    }
     const qint64 seconds = std::max<qint64>(0, currentInfo);
     const QString minutes = QString::number(seconds / 60).rightJustified(2, QLatin1Char('0'));
     const QString remainder = QString::number(seconds % 60).rightJustified(2, QLatin1Char('0'));

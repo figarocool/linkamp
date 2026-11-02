@@ -17,6 +17,9 @@ class ClassicPlaylistWindow : public QDialog
 public:
     explicit ClassicPlaylistWindow(QMediaPlaylist *playlist, QWidget *parent = nullptr);
 
+public slots:
+    void setPosition(qint64 position);
+
 signals:
     void openFilesRequested();
     void addFolderRequested();
@@ -27,6 +30,7 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void changeEvent(QEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
@@ -42,6 +46,7 @@ private:
     QSize m_resizeStartSize;
     int m_firstVisibleRow = 0;
     int m_unshadedHeight = 116;
+    qint64 m_position = 0;
     bool m_windowShaded = false;
     bool m_dragging = false;
     bool m_resizing = false;

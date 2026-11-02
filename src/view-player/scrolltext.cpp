@@ -1,18 +1,15 @@
 #include "scrolltext.h"
 #include <QPainter>
-
+#include <algorithm>
 
 ScrollText::ScrollText(QWidget *parent) :
     QWidget(parent), scrollPos(0)
 {
-    staticText.setTextFormat(Qt::PlainText);
+    leftMargin = 0;
+    setSeparator(" *** ");
 
-    leftMargin = height() / 3;
-
-    setSeparator(" --- ");
-
-    connect(&timer, SIGNAL(timeout()), this, SLOT(timer_timeout()));
-    timer.setInterval(50);
+    connect(&timer, &QTimer::timeout, this, &ScrollText::timer_timeout);
+    timer.setInterval(80);
 }
 
 QString ScrollText::text() const
@@ -43,92 +40,123 @@ void ScrollText::updateText()
 {
     timer.stop();
 
-    singleTextWidth = fontMetrics().horizontalAdvance(_text);
+    singleTextWidth = static_cast<int>(_text.length()) * 5;
     scrollEnabled = (singleTextWidth > width() - leftMargin);
 
-    if(scrollEnabled)
-    {
-        scrollPos = -64;
-        staticText.setText(_text + _separator);
+    const QString fullText = _text + _separator;
+    wholeTextSize = QSize(std::max(5, static_cast<int>(fullText.length()) * 5), 6);
+
+    if (scrollEnabled) {
+        scrollPos = -20;
         timer.start();
     }
-    else
-        staticText.setText(_text);
+}
 
-    staticText.prepare(QTransform(), font());
-    wholeTextSize = QSize(fontMetrics().horizontalAdvance(staticText.text()), fontMetrics().height());
+void ScrollText::renderBitmapText(QPainter &p, const QString &text, int startX, int startY)
+{
+    static const QPixmap fontBmp(QStringLiteral(":/assets/classic-text.png"));
+    if (fontBmp.isNull()) return;
+
+    int curX = startX;
+    for (int i = 0; i < text.length(); ++i) {
+        const QChar ch = text[i];
+        int col = -1;
+        int row = -1;
+
+        if (ch >= QLatin1Char('A') && ch <= QLatin1Char('Z')) {
+            row = 0;
+            col = ch.unicode() - 'A';
+        } else if (ch >= QLatin1Char('a') && ch <= QLatin1Char('z')) {
+            row = 0;
+            col = ch.unicode() - 'a';
+        } else if (ch == QLatin1Char('"')) {
+            row = 0; col = 26;
+        } else if (ch == QLatin1Char('@')) {
+            row = 0; col = 27;
+        } else if (ch >= QLatin1Char('0') && ch <= QLatin1Char('9')) {
+            row = 1;
+            col = ch.unicode() - '0';
+        } else if (ch == QLatin1Char('.')) {
+            row = 1; col = 11;
+        } else if (ch == QLatin1Char(':')) {
+            row = 1; col = 12;
+        } else if (ch == QLatin1Char('(')) {
+            row = 1; col = 13;
+        } else if (ch == QLatin1Char(')')) {
+            row = 1; col = 14;
+        } else if (ch == QLatin1Char('-')) {
+            row = 1; col = 15;
+        } else if (ch == QLatin1Char('\'') || ch == QLatin1Char('`')) {
+            row = 1; col = 16;
+        } else if (ch == QLatin1Char('!')) {
+            row = 1; col = 17;
+        } else if (ch == QLatin1Char('_')) {
+            row = 1; col = 18;
+        } else if (ch == QLatin1Char('+')) {
+            row = 1; col = 19;
+        } else if (ch == QLatin1Char('\\')) {
+            row = 1; col = 20;
+        } else if (ch == QLatin1Char('/')) {
+            row = 1; col = 21;
+        } else if (ch == QLatin1Char('[')) {
+            row = 1; col = 22;
+        } else if (ch == QLatin1Char(']')) {
+            row = 1; col = 23;
+        } else if (ch == QLatin1Char('^')) {
+            row = 1; col = 24;
+        } else if (ch == QLatin1Char('&')) {
+            row = 1; col = 25;
+        } else if (ch == QLatin1Char('%')) {
+            row = 1; col = 26;
+        } else if (ch == QLatin1Char(',')) {
+            row = 1; col = 27;
+        } else if (ch == QLatin1Char('=')) {
+            row = 1; col = 28;
+        } else if (ch == QLatin1Char('$')) {
+            row = 1; col = 29;
+        } else if (ch == QLatin1Char('#')) {
+            row = 1; col = 30;
+        } else if (ch == QLatin1Char(' ')) {
+            curX += 5;
+            continue;
+        }
+
+        if (col >= 0 && row >= 0) {
+            p.drawPixmap(curX, startY, fontBmp, col * 5, row * 6, 5, 6);
+        }
+        curX += 5;
+    }
 }
 
 void ScrollText::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
+    p.save();
+    p.setClipRect(rect());
+    const int y = std::max(0, (height() - 6) / 2);
 
-    if(scrollEnabled)
-    {
-        buffer.fill(qRgba(0, 0, 0, 0));
-        QPainter pb(&buffer);
-        pb.setPen(p.pen());
-        pb.setFont(p.font());
-
+    if (scrollEnabled) {
         int x = qMin(-scrollPos, 0) + leftMargin;
-        while(x < width())
-        {
-            pb.drawStaticText(QPointF(x, (height() - wholeTextSize.height()) / 2) + QPoint(2, 2), staticText);
-            x += wholeTextSize.width();
+        const QString fullText = _text + _separator;
+        const int step = std::max(5, static_cast<int>(fullText.length()) * 5);
+        while (x < width()) {
+            renderBitmapText(p, fullText, x, y);
+            x += step;
         }
-
-        //Apply Alpha Channel
-        /*pb.setCompositionMode(QPainter::CompositionMode_DestinationIn);
-        pb.setClipRect(width() - 15, 0, 15, height());
-        pb.drawImage(0, 0, alphaChannel);
-        pb.setClipRect(0, 0, 15, height());
-        //initial situation: don't apply alpha channel in the left half of the image at all; apply it more and more until scrollPos gets positive
-        if(scrollPos < 0)
-            pb.setOpacity((qreal)(qMax(-8, scrollPos) + 8) / 8.0);
-        pb.drawImage(0, 0, alphaChannel);*/
-
-        //pb.end();
-        p.drawImage(0, 0, buffer);
+    } else {
+        renderBitmapText(p, _text, leftMargin, y);
     }
-    else
-    {
-        p.drawStaticText(QPointF(leftMargin, (height() - wholeTextSize.height()) / 2), staticText);
-    }
+    p.restore();
 }
 
 void ScrollText::resizeEvent(QResizeEvent*)
 {
-    //When the widget is resized, we need to update the alpha channel.
-
-    alphaChannel = QImage(size(), QImage::Format_ARGB32_Premultiplied);
-    buffer = QImage(size(), QImage::Format_ARGB32_Premultiplied);
-
-    //Create Alpha Channel:
-    if(width() > 64)
-    {
-        //create first scanline
-        QRgb* scanline1 = (QRgb*)alphaChannel.scanLine(0);
-        for(int x = 1; x < 16; ++x)
-            scanline1[x - 1] = scanline1[width() - x] = qRgba(0, 0, 0, x << 4);
-        for(int x = 15; x < width() - 15; ++x)
-            scanline1[x] = qRgb(0, 0, 0);
-        //copy scanline to the other ones
-        for(int y = 1; y < height(); ++y)
-            memcpy(alphaChannel.scanLine(y), (uchar*)scanline1, width() * 4);
-    }
-    else
-        alphaChannel.fill(qRgb(0, 0, 0));
-
-
-    //Update scrolling state
-    bool newScrollEnabled = (singleTextWidth > width() - leftMargin);
-    if(newScrollEnabled != scrollEnabled)
-        updateText();
+    updateText();
 }
 
 void ScrollText::timer_timeout()
 {
-    scrollPos = (scrollPos + 2)
-                % wholeTextSize.width();
+    const int totalWidth = std::max(1, wholeTextSize.width());
+    scrollPos = (scrollPos + 2) % totalWidth;
     update();
 }

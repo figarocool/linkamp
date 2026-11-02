@@ -16,13 +16,13 @@ QSlider::groove:horizontal {
 }
 
 #posBar {
-        background-color: #2c2b43;
-        border-top: 6px solid #26253c;
-        border-right: 3px solid #6d6d7f;
-        border-bottom: 3px solid #6d6d7f;
-        border-left: 6px solid #26253c;
-        padding-top: -6px;
-        padding-right: -3px;
-        padding-bottom: -3px;
-        padding-left: -6px;
+        background: transparent; border: 0;
+        
+        
+        
+        
+        
+        
+        
+        
 }

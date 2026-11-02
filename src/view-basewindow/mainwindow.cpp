@@ -132,6 +132,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Keep the classic playlist editor as a separate compact top-level window.
     playlist = new ClassicPlaylistWindow(m_playlist, this);
     playlist->installEventFilter(this);
+    connect(player, &PlayerView::playbackPositionChanged, playlist, &ClassicPlaylistWindow::setPosition);
     connect(playlist, &ClassicPlaylistWindow::openFilesRequested, this, &MainWindow::open);
     connect(playlist, &ClassicPlaylistWindow::addFolderRequested, this, &MainWindow::addFolderToPlaylist);
     connect(playlist, &ClassicPlaylistWindow::addYouTubeRequested, this, &MainWindow::promptForYouTubeUrl);
@@ -197,6 +198,11 @@ MainWindow::MainWindow(QWidget *parent)
     #ifndef IS_EMBEDDED
     setWindowFlags(Qt::CustomizeWindowHint);
     #endif
+
+    QTimer::singleShot(50, this, [this] {
+        if (playlist && !playlist->isVisible())
+            showPlaylist();
+    });
 }
 
 MainWindow::~MainWindow()
@@ -276,6 +282,7 @@ void MainWindow::showPlaylist()
         return;
     }
     if (!m_havePlaylistPosition) {
+        playlist->resize(275, 116);
         m_syncingAttachedWindows = true;
         playlist->move(frameGeometry().left(), frameGeometry().bottom() + 1);
         m_lastPlaylistPosition = playlist->pos();
@@ -378,8 +385,11 @@ void MainWindow::showEvent(QShowEvent *event)
         m_syncingAttachedWindows = false;
     }
     if (playlist != nullptr && !m_havePlaylistPosition) {
+        const int y = (m_equalizerWindow != nullptr && m_equalizerWindow->isVisible())
+            ? m_equalizerWindow->frameGeometry().bottom() + 1
+            : frameGeometry().bottom() + 1;
         m_syncingAttachedWindows = true;
-        playlist->move(frameGeometry().left(), m_equalizerWindow->frameGeometry().bottom() + 1);
+        playlist->move(frameGeometry().left(), y);
         m_lastPlaylistPosition = playlist->pos();
         m_havePlaylistPosition = true;
         m_syncingAttachedWindows = false;
