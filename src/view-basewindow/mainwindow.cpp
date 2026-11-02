@@ -95,7 +95,6 @@ MainWindow::MainWindow(QWidget *parent)
     playerWindow->setAttribute(Qt::WidgetAttribute::WA_StyledBackground,  true);
     m_playerBodyContainer = playerWindow->ui->bodyContainer;
     if (auto *mainTitleBar = playerWindow->findChild<TitleBar *>(QStringLiteral("titlebarContainer"))) {
-        mainTitleBar->setTitle(QStringLiteral("LINKAMP"));
         connect(mainTitleBar, &TitleBar::menuClicked, this, &MainWindow::showMenu);
         connect(mainTitleBar, &TitleBar::shadeClicked, this, &MainWindow::toggleWindowShade);
         connect(mainTitleBar, &TitleBar::moveStarted, this, [this](bool detach) {

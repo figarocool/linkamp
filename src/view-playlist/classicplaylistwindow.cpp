@@ -8,7 +8,6 @@
 #include <QFileDialog>
 #include <QFont>
 #include <QFontMetrics>
-#include <QLinearGradient>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -66,20 +65,6 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         painter.drawPixmap(QRect(x, y, width, height), sprite,
                            QRect(sourceX, sourceY, sourceWidth, sourceHeight));
     };
-    auto drawTitle = [&painter](const QRect &titleRect, int fontPixels) {
-        QLinearGradient gradient(titleRect.topLeft(), titleRect.bottomLeft());
-        gradient.setColorAt(0.0, QColor(55, 53, 65));
-        gradient.setColorAt(1.0, QColor(28, 27, 37));
-        painter.fillRect(titleRect, gradient);
-        QFont titleFont(QStringLiteral("DejaVu Sans Mono"));
-        titleFont.setPixelSize(fontPixels);
-        titleFont.setBold(true);
-        titleFont.setStyleStrategy(QFont::NoAntialias);
-        painter.setFont(titleFont);
-        painter.setPen(Qt::white);
-        painter.drawText(titleRect, Qt::AlignCenter, QStringLiteral("LINKAMP PLAYLIST"));
-    };
-
     // Pledit.bmp is a sprite sheet; assemble its title bar and tiled frame
     // using the original sprite rectangles.
     if (m_windowShaded) {
@@ -100,7 +85,6 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         blit(x, 0, 50, 14, 99, 42, 50, 14);
         blit(width() - 11, 3, 9, 9, 167, 3, 9, 9);
         blit(width() - 20, 3, 9, 9, 128, 45, 9, 9);
-        drawTitle(QRect(25, 0, width() - 50, 14), 7);
         return;
     }
 
@@ -137,8 +121,6 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
     blit(x, 0, 25, 20, 153, 0, 25, 20);
     blit(width() - 11, 3, 9, 9, 167, 3, 9, 9);
     blit(width() - 20, 3, 9, 9, 158, 3, 9, 9);
-    drawTitle(QRect(25, 0, 100, 20), 8);
-
     const int trackHeight = height() - 20 - 38;
     int borderY = 20;
     while (borderY + 29 <= 20 + trackHeight) {

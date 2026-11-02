@@ -2,7 +2,6 @@
 #include "ui_titlebar.h"
 #include "scale.h"
 #include <QMouseEvent>
-#include <QLinearGradient>
 #include <QPainter>
 
 #include <utility>
@@ -117,17 +116,6 @@ void TitleBar::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     const int titleY = window()->isActiveWindow() ? 134 : 149;
     painter.drawPixmap(rect(), sprite, QRect(0, titleY, 275, 14));
-    QLinearGradient titleGradient(0, 0, 0, 14);
-    titleGradient.setColorAt(0.0, QColor(78, 76, 86));
-    titleGradient.setColorAt(1.0, QColor(40, 39, 49));
-    painter.fillRect(QRect(87, 0, 101, 14), titleGradient);
-    QFont titleFont(QStringLiteral("DejaVu Sans Mono"));
-    titleFont.setPixelSize(6);
-    titleFont.setBold(true);
-    titleFont.setStyleStrategy(QFont::NoAntialias);
-    painter.setFont(titleFont);
-    painter.setPen(Qt::white);
-    painter.drawText(QRect(87, 0, 101, 14), Qt::AlignCenter, QStringLiteral("LINKAMP EQUALIZER"));
     painter.drawPixmap(254, 3, 9, 9, sprite, 254, 137, 9, 9);
     painter.drawPixmap(264, 3, 9, 9, sprite, 0, 116, 9, 9);
 }
