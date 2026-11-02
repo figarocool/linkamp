@@ -123,7 +123,11 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     connect(ui->balanceSlider, &QSlider::valueChanged, this, &PlayerView::handleBalanceChanged);
 
     // Reset time counter and labels
-    ui->progressTimeLabel->setText("00:00");
+    ui->progressTimeLabel->setText("");
+    ui->volumeSlider->setValue(84);
+    ui->balanceSlider->setValue(0);
+    ui->playlistButton->setChecked(true);
+    ui->eqButton->setChecked(false);
     ui->kbpsValueLabel->setText("");
     ui->khzValueLabel->setText("");
     ui->monoLabel->setText("");
@@ -262,7 +266,7 @@ void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
     case MediaPlayer::StoppedState:
         if(spectrum) spectrum->stop();
         imageSrc = ":/assets/status_stopped.png";
-        ui->progressTimeLabel->setText("00:00");
+        ui->progressTimeLabel->setText("");
         ui->kbpsValueLabel->setText("");
         ui->khzValueLabel->setText("");
         ui->monoLabel->setText("");
@@ -427,7 +431,7 @@ void PlayerView::clearMessage()
 void PlayerView::updateDurationInfo(qint64 currentInfo)
 {
     if (m_playbackState == MediaPlayer::StoppedState) {
-        ui->progressTimeLabel->setText("00:00");
+        ui->progressTimeLabel->setText("");
         return;
     }
     const qint64 seconds = std::max<qint64>(0, currentInfo);

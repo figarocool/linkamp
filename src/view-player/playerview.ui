@@ -1212,13 +1212,13 @@
              <number>0</number>
             </property>
             <property name="leftMargin">
-             <number>0</number>
+             <number>7</number>
             </property>
             <property name="topMargin">
-             <number>0</number>
+             <number>12</number>
             </property>
             <property name="rightMargin">
-             <number>3</number>
+             <number>9</number>
             </property>
             <property name="bottomMargin">
              <number>0</number>
@@ -1227,13 +1227,13 @@
               <widget class="LinkampSlider" name="volumeSlider">
               <property name="minimumSize">
                <size>
-                <width>65</width>
+                <width>68</width>
                 <height>11</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
-                <width>65</width>
+                <width>68</width>
                 <height>11</height>
                </size>
               </property>
@@ -1288,11 +1288,11 @@ QSlider::add-page:horizontal {
                <enum>Qt::Horizontal</enum>
               </property>
               <property name="sizeType">
-               <enum>QSizePolicy::MinimumExpanding</enum>
+               <enum>QSizePolicy::Fixed</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
-                <width>16</width>
+                <width>1</width>
                 <height>1</height>
                </size>
               </property>
@@ -1363,11 +1363,11 @@ QSlider::add-page:horizontal {
                <enum>Qt::Horizontal</enum>
               </property>
               <property name="sizeType">
-               <enum>QSizePolicy::MinimumExpanding</enum>
+               <enum>QSizePolicy::Fixed</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
-                <width>14</width>
+                <width>4</width>
                 <height>1</height>
                </size>
               </property>

@@ -410,6 +410,16 @@ void MainWindow::moveEvent(QMoveEvent *event)
     moveAttachedWindows(this, delta);
 }
 
+void MainWindow::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::ActivationChange) {
+        if (auto *mainTitleBar = findChild<TitleBar *>(QStringLiteral("titlebarContainer"))) {
+            mainTitleBar->update();
+        }
+    }
+    QMainWindow::changeEvent(event);
+}
+
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     QWidget *window = qobject_cast<QWidget *>(watched);

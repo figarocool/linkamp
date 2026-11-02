@@ -123,6 +123,22 @@ void TitleBar::changeEvent(QEvent *event)
     QWidget::changeEvent(event);
 }
 
+void TitleBar::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    if (window()) {
+        window()->installEventFilter(this);
+    }
+}
+
+bool TitleBar::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == window() && (event->type() == QEvent::ActivationChange || event->type() == QEvent::WindowActivate || event->type() == QEvent::WindowDeactivate)) {
+        update();
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void TitleBar::paintEvent(QPaintEvent *event)
 {
     if (!m_classicEqualizerStyle) {

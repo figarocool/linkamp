@@ -335,17 +335,19 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         }
     }
 
-    const QString currentTime = formatDuration(m_position);
-    const QString totalTime = formatDuration(m_playlist->totalDuration());
-    const QString comboTime = currentTime + QLatin1Char('/') + totalTime;
+    if (m_playlist->mediaCount() > 0 && m_playlist->totalDuration() > 0) {
+        const QString currentTime = formatDuration(m_position);
+        const QString totalTime = formatDuration(m_playlist->totalDuration());
+        const QString comboTime = currentTime + QLatin1Char('/') + totalTime;
 
-    // Top LCD box (track time / total time): right-aligned inside LCD box
-    const int topLcdX = (width() - 150 + 94) - comboTime.length() * 5;
-    renderBitmapTextPl(painter, comboTime, topLcdX, height() - 28, false);
+        // Top LCD box (track time / total time): right-aligned inside LCD box
+        const int topLcdX = (width() - 150 + 94) - comboTime.length() * 5;
+        renderBitmapTextPl(painter, comboTime, topLcdX, height() - 28, false);
 
-    // Bottom LCD box (current track time): right-aligned inside LCD box
-    const int botLcdX = (width() - 150 + 94) - currentTime.length() * 5;
-    renderBitmapTextPl(painter, currentTime, botLcdX, height() - 16, false);
+        // Bottom LCD box (current track time): right-aligned inside LCD box
+        const int botLcdX = (width() - 150 + 94) - currentTime.length() * 5;
+        renderBitmapTextPl(painter, currentTime, botLcdX, height() - 16, false);
+    }
 }
 
 void ClassicPlaylistWindow::mousePressEvent(QMouseEvent *event)
