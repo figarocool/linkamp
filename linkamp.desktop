@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Name=Linkamp
+Comment=Linkamp classic music player with YouTube audio streaming
+Exec=/usr/bin/linkamp-player %U
+Icon=/usr/share/icons/hicolor/72x72/apps/linkamp-player.png
+Terminal=false
+#StartupWMClass=name of application
+Type=Application
+Categories=AudioVideo;Audio;Player;
+Keywords=linkamp;music;sound;audio;player;
+MimeType=x-scheme-handler/linkamp;

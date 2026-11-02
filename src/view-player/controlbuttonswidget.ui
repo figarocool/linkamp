@@ -482,37 +482,6 @@ QCheckBox::indicator:indeterminate:pressed {
      </property>
     </spacer>
    </item>
-   <item>
-    <widget class="QPushButton" name="logoButton">
-     <property name="minimumSize">
-      <size>
-       <width>18</width>
-       <height>18</height>
-      </size>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>18</width>
-       <height>18</height>
-      </size>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">#logoButton {
-	background-color: transparent;
-	border-image: url(:assets/logoButton.png);
-	background: none;
-	background-repeat: none;
-}
-
-#logoButton:pressed {
-	border-image: url(:assets/logoButton.png);
-}</string>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-   </item>
   </layout>
  </widget>
  <resources/>

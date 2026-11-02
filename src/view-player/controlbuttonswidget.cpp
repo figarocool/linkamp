@@ -19,7 +19,6 @@ ControlButtonsWidget::ControlButtonsWidget(QWidget *parent) :
     connect(ui->openButton, &QPushButton::clicked, this, &ControlButtonsWidget::openClicked);
     connect(ui->repeatButton, &QCheckBox::clicked, this, &ControlButtonsWidget::repeatClicked);
     connect(ui->shuffleButton, &QCheckBox::clicked, this, &ControlButtonsWidget::shuffleClicked);
-    connect(ui->logoButton, &QCheckBox::clicked, this, &ControlButtonsWidget::logoClicked);
 }
 
 ControlButtonsWidget::~ControlButtonsWidget()
@@ -59,6 +58,7 @@ void ControlButtonsWidget::scale()
     ui->openButton->setMaximumHeight(ui->openButton->maximumHeight() * UI_SCALE);
     ui->openButton->setMinimumHeight(ui->openButton->minimumHeight() * UI_SCALE);
 
+
     ui->shuffleButton->setMaximumWidth(ui->shuffleButton->maximumWidth() * UI_SCALE);
     ui->shuffleButton->setMinimumWidth(ui->shuffleButton->minimumWidth() * UI_SCALE);
     ui->shuffleButton->setMaximumHeight(ui->shuffleButton->maximumHeight() * UI_SCALE);
@@ -70,11 +70,6 @@ void ControlButtonsWidget::scale()
     ui->repeatButton->setMaximumHeight(ui->repeatButton->maximumHeight() * UI_SCALE);
     ui->repeatButton->setMinimumHeight(ui->repeatButton->minimumHeight() * UI_SCALE);
     ui->repeatButton->setStyleSheet(getStylesheet("controlbuttonswidget.repeatButton"));
-
-    ui->logoButton->setMaximumWidth(ui->logoButton->maximumWidth() * UI_SCALE);
-    ui->logoButton->setMinimumWidth(ui->logoButton->minimumWidth() * UI_SCALE);
-    ui->logoButton->setMaximumHeight(ui->logoButton->maximumHeight() * UI_SCALE);
-    ui->logoButton->setMinimumHeight(ui->logoButton->minimumHeight() * UI_SCALE);
 
     ui->playControlsContainer->setMaximumWidth(ui->playControlsContainer->maximumWidth() * UI_SCALE);
     ui->playControlsContainer->setMinimumWidth(ui->playControlsContainer->minimumWidth() * UI_SCALE);

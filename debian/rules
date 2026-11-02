@@ -4,14 +4,14 @@
 	dh $@ --with python3 --buildsystem=cmake
 
 override_dh_auto_install:
-	mkdir -p debian/linamp/usr/bin
-	cp build/player debian/linamp/usr/bin/linamp-player
+	mkdir -p debian/linkamp/usr/bin
+	cp build/player debian/linkamp/usr/bin/linkamp-player
 
-	mkdir -p debian/linamp/usr/lib/python3/dist-packages/linamp
-	cp -r python/linamp debian/linamp/usr/lib/python3/dist-packages/
+	mkdir -p debian/linkamp/usr/lib/python3/dist-packages/linamp
+	cp -r python/linamp debian/linkamp/usr/lib/python3/dist-packages/
 	
-	mkdir -p debian/linamp/usr/share/applications/
-	cp linamp.desktop debian/linamp/usr/share/applications/
+	mkdir -p debian/linkamp/usr/share/applications/
+	cp linkamp.desktop debian/linkamp/usr/share/applications/
 	
-	mkdir -p debian/linamp/usr/share/icons/hicolor/72x72/apps/
-	cp assets/logoButton.png debian/linamp/usr/share/icons/hicolor/72x72/apps/linamp-player.png
+	mkdir -p debian/linkamp/usr/share/icons/hicolor/72x72/apps/
+	cp assets/logoButton.png debian/linkamp/usr/share/icons/hicolor/72x72/apps/linkamp-player.png

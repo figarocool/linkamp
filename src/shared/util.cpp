@@ -99,3 +99,16 @@ bool isPlaylist(const QUrl &url)
     return fileInfo.exists()
            && !fileInfo.suffix().compare(QLatin1String("m3u"), Qt::CaseInsensitive);
 }
+
+bool isYouTubeUrl(const QUrl &url)
+{
+    if (url.scheme() != QLatin1String("http") && url.scheme() != QLatin1String("https"))
+        return false;
+
+    const QString host = url.host().toLower();
+    return host == QLatin1String("youtu.be")
+           || host == QLatin1String("youtube.com")
+           || host.endsWith(QLatin1String(".youtube.com"))
+           || host == QLatin1String("youtube-nocookie.com")
+           || host.endsWith(QLatin1String(".youtube-nocookie.com"));
+}

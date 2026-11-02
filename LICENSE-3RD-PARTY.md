@@ -1,6 +1,6 @@
 # THIRD PARTY LICENCES
 
-linamp-player includes the following third-party software/licensing:
+Linkamp includes the following third-party software/licensing:
 
 
 ## boxicons - https://boxicons.com/

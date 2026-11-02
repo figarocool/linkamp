@@ -1,3 +1,10 @@
+linkamp (1.6.3) unstable; urgency=medium
+
+  * Rebrand the desktop application and YouTube integration as Linkamp.
+  * Add streaming YouTube playlist support and the Linkamp Chrome extension.
+
+ -- Stefano Basile <stefanobasile@usa.com>  Mon, 02 Nov 2026 14:00:00 +0100
+
 linamp (1.6.2) unstable; urgency=medium
 
   * Bugfix: Volume and balance control the hardware sound card while the

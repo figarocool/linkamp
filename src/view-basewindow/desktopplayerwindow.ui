@@ -117,8 +117,8 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#DesktopPlayerWindow {
-	background-color: #333350;
+       <string notr="true">#DesktopPlayerWindow {
+	background-color: transparent;
 }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
@@ -140,8 +140,8 @@
    <item>
     <widget class="QFrame" name="dpwBodyInnerFrame">
      <property name="styleSheet">
-      <string notr="true">#bodyInnerFrame {
-	background-color: #333350;
+       <string notr="true">#bodyInnerFrame {
+	background-color: transparent;
 }</string>
      </property>
      <property name="frameShape">

@@ -8,6 +8,8 @@
 #include "playlistmodel.h"
 #include "mediaplayer.h"
 
+class QProcess;
+
 class AudioSourceFile : public AudioSourceWSpectrumCapture
 {
     Q_OBJECT
@@ -16,6 +18,7 @@ public:
 
 signals:
     void showPlaylistRequested();
+    void openFilesRequested();
 
 public slots:
     void activate();
@@ -34,6 +37,7 @@ public slots:
     void jump(const QModelIndex &index);
 
     void addToPlaylist(const QList<QUrl> &urls);
+    void addYouTubeToPlaylist(const QUrl &url, const QMediaMetaData &metadata);
 
 private slots:
     void handleMetaDataChanged();
@@ -50,12 +54,15 @@ private:
     PlaylistModel *m_playlistModel = nullptr;
 
     QString m_statusInfo;
+    QUrl m_resolvedYouTubeMedia;
 
     bool shuffleEnabled = false;
     bool repeatEnabled = false;
     bool shouldBePlaying = false;
+    QProcess *m_youtubeResolveProcess = nullptr;
 
     void setStatusInfo(const QString &info);
+    QMediaMetaData currentMetaData() const;
 
 };
 

@@ -57,6 +57,7 @@ public:
     qint64 totalDuration() const;
 
     void addMedia(const QUrl &content);
+    void addMedia(const QUrl &content, const QMediaMetaData &metadata);
     void addMedia(const QList<QUrl> &items);
     bool insertMedia(int index, const QUrl &content);
     bool insertMedia(int index, const QList<QUrl> &items);

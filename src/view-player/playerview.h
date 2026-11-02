@@ -69,7 +69,6 @@ signals:
     void openClicked();
     void shuffleClicked();
     void repeatClicked();
-    void menuClicked();
 
 private:
     Ui::PlayerView *ui;

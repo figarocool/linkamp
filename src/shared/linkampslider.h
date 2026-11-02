@@ -1,15 +1,15 @@
-#ifndef LINAMPSLIDER_H
-#define LINAMPSLIDER_H
+#ifndef LINKAMPSLIDER_H
+#define LINKAMPSLIDER_H
 
 #include <QSlider>
 #include <QImage>
 #include <QColor>
 
-class LinampSlider : public QSlider
+class LinkampSlider : public QSlider
 {
     Q_OBJECT
 public:
-    LinampSlider(QWidget* parent);
+    LinkampSlider(QWidget* parent);
 
     void setGradient(QColor from, QColor to, Qt::Orientation orientation);
 
@@ -23,4 +23,4 @@ private:
     QString baseStylesheet;
 };
 
-#endif // LINAMPSLIDER_H
+#endif // LINKAMPSLIDER_H

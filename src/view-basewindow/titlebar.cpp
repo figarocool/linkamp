@@ -2,6 +2,10 @@
 #include "ui_titlebar.h"
 #include "scale.h"
 #include <QMouseEvent>
+#include <QLinearGradient>
+#include <QPainter>
+
+#include <utility>
 
 TitleBar::TitleBar(QWidget *parent) :
     QWidget(parent),
@@ -9,6 +13,13 @@ TitleBar::TitleBar(QWidget *parent) :
 {
     ui->setupUi(this);
     scale();
+    setStyleSheet("TitleBar { border-image: url(:assets/classic-titlebar.png); background: transparent; }");
+    ui->lineLT->hide();
+    ui->lineLB->hide();
+    ui->lineRT->hide();
+    ui->lineRB->hide();
+    connect(ui->menuButton, &QPushButton::clicked, this, &TitleBar::menuClicked);
+    connect(ui->shadeButton, &QPushButton::clicked, this, &TitleBar::shadeClicked);
     connect(ui->closeButton, &QPushButton::clicked, window(), &QWidget::close);
     connect(ui->minimizeButton, &QPushButton::clicked, window(), &QWidget::showMinimized);
 }
@@ -16,6 +27,25 @@ TitleBar::TitleBar(QWidget *parent) :
 TitleBar::~TitleBar()
 {
     delete ui;
+}
+
+void TitleBar::setTitle(const QString &title)
+{
+    ui->windowTitle->setText(title);
+}
+
+void TitleBar::setClassicEqualizerStyle()
+{
+    m_classicEqualizerStyle = true;
+    ui->menuButton->hide();
+    ui->minimizeButton->hide();
+    ui->shadeButton->hide();
+    ui->closeButton->hide();
+    ui->windowTitle->hide();
+    ui->decorationL->hide();
+    ui->decorationR->hide();
+    setStyleSheet(QStringLiteral("TitleBar { background: transparent; }") );
+    update();
 }
 
 
@@ -27,6 +57,12 @@ void TitleBar::scale()
 
     ui->closeButton->setMaximumSize(ui->closeButton->maximumSize() * UI_SCALE);
     ui->closeButton->setMinimumSize(ui->closeButton->minimumSize() * UI_SCALE);
+
+    ui->menuButton->setMaximumSize(ui->menuButton->maximumSize() * UI_SCALE);
+    ui->menuButton->setMinimumSize(ui->menuButton->minimumSize() * UI_SCALE);
+
+    ui->shadeButton->setMaximumSize(ui->shadeButton->maximumSize() * UI_SCALE);
+    ui->shadeButton->setMinimumSize(ui->shadeButton->minimumSize() * UI_SCALE);
 
     ui->minimizeButton->setMaximumSize(ui->minimizeButton->maximumSize() * UI_SCALE);
     ui->minimizeButton->setMinimumSize(ui->minimizeButton->minimumSize() * UI_SCALE);
@@ -66,10 +102,52 @@ void TitleBar::scale()
     ui->horizontalSpacer_4->changeSize(sh4.width()*UI_SCALE, sh4.height(), sp4.horizontalPolicy(), sp4.verticalPolicy());
 }
 
+void TitleBar::paintEvent(QPaintEvent *event)
+{
+    if (!m_classicEqualizerStyle) {
+        QWidget::paintEvent(event);
+        return;
+    }
+
+    Q_UNUSED(event);
+    const QPixmap sprite(QStringLiteral(":/assets/classic-eqmain.png"));
+    if (sprite.isNull())
+        return;
+
+    QPainter painter(this);
+    const int titleY = window()->isActiveWindow() ? 134 : 149;
+    painter.drawPixmap(rect(), sprite, QRect(0, titleY, 275, 14));
+    QLinearGradient titleGradient(0, 0, 0, 14);
+    titleGradient.setColorAt(0.0, QColor(78, 76, 86));
+    titleGradient.setColorAt(1.0, QColor(40, 39, 49));
+    painter.fillRect(QRect(87, 0, 101, 14), titleGradient);
+    QFont titleFont(QStringLiteral("DejaVu Sans Mono"));
+    titleFont.setPixelSize(6);
+    titleFont.setBold(true);
+    titleFont.setStyleStrategy(QFont::NoAntialias);
+    painter.setFont(titleFont);
+    painter.setPen(Qt::white);
+    painter.drawText(QRect(87, 0, 101, 14), Qt::AlignCenter, QStringLiteral("LINKAMP EQUALIZER"));
+    painter.drawPixmap(254, 3, 9, 9, sprite, 254, 137, 9, 9);
+    painter.drawPixmap(264, 3, 9, 9, sprite, 0, 116, 9, 9);
+}
+
 void TitleBar::mousePressEvent(QMouseEvent *event)
 {
+    if (m_classicEqualizerStyle && event->button() == Qt::LeftButton) {
+        const QPoint position = event->position().toPoint();
+        m_pressedEqualizerClose = position.x() >= 264 && position.y() <= 12;
+        m_pressedEqualizerShade = position.x() >= 254 && position.x() < 263
+                                  && position.y() <= 12;
+        if (m_pressedEqualizerClose || m_pressedEqualizerShade) {
+            event->accept();
+            return;
+        }
+    }
     if(event->button() == Qt::LeftButton)
     {
+        m_dragging = true;
+        emit moveStarted(event->modifiers() & Qt::ShiftModifier);
         m_pCursor = event->globalPosition() - window()->geometry().topLeft();
         event->accept();
     }
@@ -82,4 +160,29 @@ void TitleBar::mouseMoveEvent(QMouseEvent *event)
         window()->move((event->globalPosition() - m_pCursor).toPoint());
         event->accept();
     }
+}
+
+void TitleBar::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (m_classicEqualizerStyle && event->button() == Qt::LeftButton) {
+        const QPoint position = event->position().toPoint();
+        const bool closePressed = std::exchange(m_pressedEqualizerClose, false);
+        const bool shadePressed = std::exchange(m_pressedEqualizerShade, false);
+        if (closePressed && position.x() >= 264 && position.y() <= 12)
+            window()->close();
+        else if (shadePressed && position.x() >= 254 && position.x() < 263
+                 && position.y() <= 12)
+            emit shadeClicked();
+        if (closePressed || shadePressed) {
+            event->accept();
+            return;
+        }
+    }
+    if (m_dragging && event->button() == Qt::LeftButton) {
+        m_dragging = false;
+        emit moveFinished();
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
 }

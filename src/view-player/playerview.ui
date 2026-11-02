@@ -35,8 +35,8 @@
    <bool>false</bool>
   </property>
   <property name="styleSheet">
-   <string notr="true">#PlayerView {
-	background-color: #333350;
+     <string notr="true">#PlayerView {
+	background-color: transparent;
 }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -1224,7 +1224,7 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="LinampSlider" name="volumeSlider">
+              <widget class="LinkampSlider" name="volumeSlider">
               <property name="minimumSize">
                <size>
                 <width>65</width>
@@ -1299,7 +1299,7 @@ QSlider::add-page:horizontal {
              </spacer>
             </item>
             <item>
-             <widget class="LinampSlider" name="balanceSlider">
+              <widget class="LinkampSlider" name="balanceSlider">
               <property name="minimumSize">
                <size>
                 <width>38</width>
@@ -1594,9 +1594,9 @@ QSlider::groove:horizontal {
    <header>scrolltext.h</header>
   </customwidget>
   <customwidget>
-   <class>LinampSlider</class>
+    <class>LinkampSlider</class>
    <extends>QSlider</extends>
-   <header>linampslider.h</header>
+    <header>linkampslider.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

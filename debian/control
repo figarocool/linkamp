@@ -1,7 +1,7 @@
-Source: linamp
+Source: linkamp
 Section: sound
 Priority: optional
-Maintainer: Rodrigo Méndez <rodrigo@linamp.org>
+Maintainer: Stefano Basile <stefanobasile@usa.com>
 Rules-Requires-Root: no
 Build-Depends:
  debhelper-compat (= 13),
@@ -22,11 +22,11 @@ Build-Depends:
  python3-dev,
  dh-python
 Standards-Version: 4.6.2
-Homepage: https://github.com/Rodmg/linamp
-Vcs-Browser: https://github.com/Rodmg/linamp
-Vcs-Git: https://github.com/Rodmg/linamp.git
+Homepage: https://github.com/figarocool/linkamp
+Vcs-Browser: https://github.com/figarocool/linkamp
+Vcs-Git: https://github.com/figarocool/linkamp.git
 
-Package: linamp
+Package: linkamp
 Architecture: any
 Depends:
  ${shlibs:Depends},
@@ -36,7 +36,6 @@ Depends:
  python3-dbus-next,
  libdiscid0,
  qt6-wayland
-Description: Your favorite music player of the 90s, but in real life
- Music player app for Linamp - Your favorite music player of the 90s,
- but in real life.
- Built with QT6.
+Description: Linkamp classic music player
+ Music player with a classic compact interface and YouTube audio streaming.
+ Built with Qt 6.

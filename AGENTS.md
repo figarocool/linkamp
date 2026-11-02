@@ -1,6 +1,6 @@
 # AGENTS
 
-This repository contains Linamp, a Qt 6 music player for Linux with file playback, native CD playback, and a retro Winamp-style UI.
+This repository contains Linkamp, a Qt 6 music player for Linux with file playback, native CD playback, and a classic compact UI.
 
 ## Project Focus
 

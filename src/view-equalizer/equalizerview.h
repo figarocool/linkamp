@@ -9,6 +9,7 @@ class EqualizerPresetView;
 class EqPreset;
 class QCheckBox;
 class QLabel;
+class QPaintEvent;
 class QSlider;
 class QTimer;
 
@@ -22,6 +23,7 @@ signals:
     void backClicked();
 
 protected:
+    void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 
 private:
@@ -29,6 +31,7 @@ private:
     EqualizerGraph *m_graph = nullptr;
     EqualizerPresetView *m_presetView = nullptr;
     QCheckBox *m_onButton = nullptr;
+    QCheckBox *m_autoButton = nullptr;
     QLabel *m_valueLabel = nullptr;
     QTimer *m_valueHideTimer = nullptr;
     QSlider *m_preampSlider = nullptr;

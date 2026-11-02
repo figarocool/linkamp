@@ -15,7 +15,7 @@ if [ "${VERSION_CODENAME:-}" != trixie ]; then
 	exit 1
 fi
 
-ARTIFACTS_DIR="${HOME}/linamp-debs"
+ARTIFACTS_DIR="${HOME}/linkamp-debs"
 
 echo "Installing packaging tools..."
 export DEBIAN_FRONTEND=noninteractive
@@ -29,7 +29,7 @@ sudo apt-get install --no-install-recommends -y \
 	fakeroot \
 	rsync
 
-BUILD_DIR=$(mktemp -d --tmpdir linamp-deb-build-XXXXXX)
+BUILD_DIR=$(mktemp -d --tmpdir linkamp-deb-build-XXXXXX)
 cleanup() {
 	rm -rf -- "$BUILD_DIR"
 }
@@ -67,7 +67,7 @@ dpkg-buildpackage -us -uc
 PARENT_DIR=$(dirname -- "${BUILD_DIR}")
 mkdir -p "${ARTIFACTS_DIR}"
 shopt -s nullglob
-debs=("${PARENT_DIR}"/linamp_*.deb)
+debs=("${PARENT_DIR}"/linkamp_*.deb)
 if [ "${#debs[@]}" -eq 0 ]; then
 	echo "No .deb files found in ${PARENT_DIR}" >&2
 	exit 1
@@ -78,5 +78,5 @@ for deb in "${debs[@]}"; do
 done
 
 echo "Built packages:"
-ls -la "${ARTIFACTS_DIR}"/linamp_*.deb
-echo "Install with: sudo apt install ${ARTIFACTS_DIR}/linamp_*.deb"
+ls -la "${ARTIFACTS_DIR}"/linkamp_*.deb
+echo "Install with: sudo apt install ${ARTIFACTS_DIR}/linkamp_*.deb"

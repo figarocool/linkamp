@@ -23,8 +23,10 @@
 
 namespace {
 
-const char *kEqNodeName = "linamp-eq";
-const char *kEqOutputName = "linamp-eq-output";
+const char *kEqNodeName = "linkamp-eq";
+const char *kEqOutputName = "linkamp-eq-output";
+const char *kLegacyEqNodeName = "linamp-eq";
+const char *kLegacyEqOutputName = "linamp-eq-output";
 const char *kDefaultSinkKey = "default.audio.sink";
 const char *kConfiguredSinkKey = "default.configured.audio.sink";
 constexpr int kPwTimeoutMs = 3000;
@@ -119,7 +121,6 @@ public:
     QString hardwareSink;
     QStringList sinkNames;
     QHash<QString, uint32_t> sinkIds;
-    bool hardwareSinkChosen = false;
     bool claimedDefault = false;
 
     static void onCoreDone(void *data, uint32_t id, int seq)
@@ -155,14 +156,15 @@ public:
     {
         Q_UNUSED(type);
         auto *pw = static_cast<Pw *>(data);
-        if (subject != PW_ID_CORE || key == nullptr || pw->hardwareSinkChosen) {
+        if (subject != PW_ID_CORE || key == nullptr) {
             return 0;
         }
         if (!spa_streq(key, kDefaultSinkKey)) {
             return 0;
         }
         const QString name = sinkNameFromMetadata(value);
-        if (!name.isEmpty() && name != QLatin1String(kEqNodeName)) {
+        if (!name.isEmpty() && name != QLatin1String(kEqNodeName)
+            && name != QLatin1String(kLegacyEqNodeName)) {
             pw->defaultSinkName = name;
         }
         return 0;
@@ -205,7 +207,9 @@ public:
                 pw_thread_loop_signal(pw->loop, false);
             }
             if (name != nullptr && mediaClass != nullptr && spa_streq(mediaClass, "Audio/Sink")
-                && !spa_streq(name, kEqNodeName)) {
+                && !spa_streq(name, kEqNodeName)
+                && !spa_streq(name, kLegacyEqNodeName)
+                && !spa_streq(name, kLegacyEqOutputName)) {
                 const QString sinkName = QString::fromUtf8(name);
                 pw->sinkIds.insert(sinkName, id);
                 if (!pw->sinkNames.contains(sinkName)) {
@@ -278,6 +282,21 @@ public:
     QString chooseHardwareSink() const
     {
         if (!defaultSinkName.isEmpty() && sinkNames.contains(defaultSinkName)) {
+            const QString lowerDefault = defaultSinkName.toLower();
+            if (!lowerDefault.contains(QLatin1String("hdmi"))
+                && !lowerDefault.contains(QLatin1String("spdif"))
+                && !lowerDefault.contains(QLatin1String("digital"))) {
+                return defaultSinkName;
+            }
+        }
+        // On desktop systems HDMI is often the default even when the speakers
+        // are connected to the analog output. Prefer that analog sink for the
+        // Linkamp player, while leaving the user's global default untouched.
+        for (const QString &name : sinkNames) {
+            if (name.contains(QLatin1String("analog"), Qt::CaseInsensitive))
+                return name;
+        }
+        if (!defaultSinkName.isEmpty() && sinkNames.contains(defaultSinkName)) {
             return defaultSinkName;
         }
         if (!sinkNames.isEmpty()) {
@@ -301,10 +320,12 @@ public:
 
     void restoreDefault()
     {
-        if (!claimedDefault || hardwareSink.isEmpty()) {
+        if (!claimedDefault) {
             return;
         }
-        setDefaultSink(hardwareSink);
+        const QString restoreSink = !defaultSinkName.isEmpty() && sinkNames.contains(defaultSinkName)
+            ? defaultSinkName : hardwareSink;
+        setDefaultSink(restoreSink);
         sync();
     }
 
@@ -330,8 +351,8 @@ public:
         }
 
         return QString(
-                   "node.description = \"Linamp Equalizer\"\n"
-                   "media.name = \"Linamp Equalizer\"\n"
+                    "node.description = \"Linkamp Equalizer\"\n"
+                    "media.name = \"Linkamp Equalizer\"\n"
                    "filter.graph = {\n"
                    "    nodes = [\n"
                    "%1"
@@ -343,13 +364,13 @@ public:
                    "audio.channels = 2\n"
                    "audio.position = [ FL FR ]\n"
                    "capture.props = {\n"
-                   "    node.name = \"linamp-eq\"\n"
-                   "    node.description = \"Linamp Equalizer\"\n"
+                    "    node.name = \"linkamp-eq\"\n"
+                    "    node.description = \"Linkamp Equalizer\"\n"
                    "    media.class = Audio/Sink\n"
                    "    state.restore-props = \"false\"\n"
                    "}\n"
                    "playback.props = {\n"
-                   "    node.name = \"linamp-eq-output\"\n"
+                    "    node.name = \"linkamp-eq-output\"\n"
                    "    node.passive = true\n"
                    "    state.restore-props = \"false\"\n"
                    "    %3\n"
@@ -535,7 +556,7 @@ public:
 
     // Tear down while the thread loop is still running so the daemon
     // actually receives the unexport. Stopping the loop first leaves
-    // linamp-eq as a zombie default sink and wedges PipeWire.
+    // an EQ sink as a zombie default and wedges PipeWire.
     void shutdown()
     {
         restoreDefault();
@@ -822,7 +843,7 @@ bool SystemEqualizer::startPipeWire()
     pw_init(nullptr, nullptr);
     pw->pwInit = true;
 
-    pw->loop = pw_thread_loop_new("linamp-eq", nullptr);
+    pw->loop = pw_thread_loop_new("linkamp-eq", nullptr);
     if (pw->loop == nullptr) {
         qWarning() << "PipeWire EQ failed to create a thread loop";
         return false;
@@ -878,7 +899,6 @@ bool SystemEqualizer::startPipeWire()
         return false;
     }
 
-    pw->hardwareSinkChosen = true;
     pw->hardwareSink = pw->chooseHardwareSink();
     if (pw->hardwareSink.isEmpty()) {
         qWarning() << "PipeWire EQ found no hardware sink to target";
@@ -911,7 +931,7 @@ bool SystemEqualizer::startPipeWire()
             }
         }
     } else {
-        qDebug() << "PipeWire EQ reusing existing linamp-eq sink";
+        qDebug() << "PipeWire EQ reusing existing linkamp-eq sink";
     }
 
     pw->node = static_cast<pw_node *>(pw_registry_bind(

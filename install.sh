@@ -3,14 +3,14 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-echo "This script re-installs linamp executable files in linamp-os. This should only be run inside linamp-os"
+echo "This script re-installs Linkamp executable files in Linkamp OS. This should only be run inside Linkamp OS"
 
 # Assumes the build files are on the same folder as this script
-rm -rf ~/linamp/*
-cp -r build ~/linamp/
-cp shutdown.sh ~/linamp/
-cp start.sh ~/linamp/
-cp -r venv ~/linamp/
-cp -r python ~/linamp/
+rm -rf ~/linkamp/*
+cp -r build ~/linkamp/
+cp shutdown.sh ~/linkamp/
+cp start.sh ~/linkamp/
+cp -r venv ~/linkamp/
+cp -r python ~/linkamp/
 
 echo "Done!"

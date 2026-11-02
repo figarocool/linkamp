@@ -62,7 +62,8 @@ void AudioSourceCoordinator::setSource(int newSource)
     }
 
     currentSource = newSource;
-    view->setDeferredSeekEnabled(sourceLabels[currentSource] == "CD");
+    view->setDeferredSeekEnabled(sourceLabels[currentSource] == "CD"
+                                 || sourceLabels[currentSource] == "FILE");
 
     // connect slots to new source
     connect(view, &PlayerView::positionChanged, sources[currentSource], &AudioSource::handleSeek);

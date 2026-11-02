@@ -105,7 +105,7 @@ void EqPresetStore::saveCustom(const QVector<EqPreset> &presets)
         array.append(toJsonObject(preset));
     }
     QJsonObject root;
-    root.insert("type", "Winamp EQ library file v1.1");
+    root.insert("type", "Linkamp EQ library file v1.1");
     root.insert("presets", array);
 
     QSettings settings;

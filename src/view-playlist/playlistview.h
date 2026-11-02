@@ -19,6 +19,7 @@ class PlaylistView : public QWidget
 public:
     explicit PlaylistView(QWidget *parent = nullptr, PlaylistModel *playlistModel = nullptr);
     ~PlaylistView();
+    void setClassicMode();
 
 private:
     Ui::PlaylistView *ui;
@@ -26,6 +27,7 @@ private:
     PlaylistModel *m_playlistModel = nullptr;
     QFileSystemModel *m_fileSystemModel = nullptr;
     QScroller *m_playlistViewScroller = nullptr;
+    bool m_classicMode = false;
 
     void setupPlayListUi();
     void setupFileBrowserUi();
@@ -45,6 +47,9 @@ private slots:
     void fbGoUp();
     void fbAdd();
     void fbToggleSelect();
+    void togglePlaylistSelection();
+    void showAddMenu();
+    void showListMenu();
 
     void fbItemClicked(const QModelIndex &index);
 
@@ -56,6 +61,8 @@ signals:
     void showPlayerClicked();
     void songSelected(const QModelIndex &index);
     void addSelectedFilesClicked(const QList<QUrl> &urls);
+    void addFilesRequested();
+    void addYouTubeRequested();
 };
 
 #endif // PLAYLISTVIEW_H

@@ -39,14 +39,29 @@
      </property>
      <property name="sizeHint" stdset="0">
       <size>
-       <width>13</width>
+          <width>3</width>
        <height>1</height>
       </size>
      </property>
     </spacer>
-   </item>
-   <item>
-    <spacer name="horizontalSpacer_4">
+    </item>
+    <item>
+     <widget class="QPushButton" name="menuButton">
+      <property name="minimumSize">
+       <size><width>9</width><height>9</height></size>
+      </property>
+      <property name="maximumSize">
+       <size><width>9</width><height>9</height></size>
+      </property>
+      <property name="toolTip"><string>Menu</string></property>
+      <property name="styleSheet">
+       <string notr="true">QPushButton { border:0; background:transparent; border-image:url(:assets/classic-menu.png); }</string>
+      </property>
+      <property name="text"><string/></property>
+     </widget>
+    </item>
+    <item>
+     <spacer name="horizontalSpacer_4">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
@@ -55,7 +70,7 @@
      </property>
      <property name="sizeHint" stdset="0">
       <size>
-       <width>1</width>
+        <width>2</width>
        <height>1</height>
       </size>
      </property>
@@ -148,7 +163,7 @@
 }</string>
      </property>
      <property name="text">
-      <string>LINAMP</string>
+        <string>LINKAMP</string>
      </property>
     </widget>
    </item>
@@ -228,14 +243,14 @@
     <widget class="QPushButton" name="minimizeButton">
      <property name="minimumSize">
       <size>
-       <width>7</width>
-       <height>7</height>
+       <width>9</width>
+       <height>9</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>7</width>
-       <height>7</height>
+       <width>9</width>
+       <height>9</height>
       </size>
      </property>
      <property name="styleSheet">
@@ -254,19 +269,34 @@
       <string/>
      </property>
     </widget>
-   </item>
-   <item>
-    <widget class="QPushButton" name="closeButton">
-     <property name="minimumSize">
-      <size>
-       <width>7</width>
-       <height>7</height>
+    </item>
+    <item>
+     <widget class="QPushButton" name="shadeButton">
+      <property name="minimumSize">
+       <size><width>9</width><height>9</height></size>
+      </property>
+      <property name="maximumSize">
+       <size><width>9</width><height>9</height></size>
+      </property>
+      <property name="toolTip"><string>Window shade</string></property>
+      <property name="styleSheet">
+       <string notr="true">QPushButton { border:0; background:transparent; border-image:url(:assets/windowMaximize.png); }</string>
+      </property>
+      <property name="text"><string/></property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="closeButton">
+      <property name="minimumSize">
+       <size>
+        <width>9</width>
+        <height>9</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>7</width>
-       <height>7</height>
+        <width>9</width>
+        <height>9</height>
       </size>
      </property>
      <property name="styleSheet">

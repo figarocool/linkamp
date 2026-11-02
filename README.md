@@ -1,6 +1,8 @@
-# Linamp player
+# Linkamp
 
-Music player app for Linamp - Your favorite music player of the 90s, but in real life.
+Riproduttore musicale Linkamp, con interfaccia classica e supporto audio in streaming da YouTube.
+
+Maintainer: Stefano Basile <stefanobasile@usa.com>.
 
 ## Requirements
 
@@ -16,12 +18,14 @@ Music player app for Linamp - Your favorite music player of the 90s, but in real
 - python3-full
 - python3-dev
 - python3-dbus-next
+- yt-dlp (installed in the application virtual environment)
+- Node.js (used by yt-dlp for YouTube's JavaScript challenge support)
 
 ## Development
 
 ### Setup
 
-The exact steps you need to take to setup your dev environment will depend on your OS. Currently I'm using Debian Trixie as my dev environment as it's very close to the target device environment (Raspberry Pi with DietPi, which is based on Debian Trixie).
+The setup steps depend on your operating system. Linkamp is developed and tested on Debian Trixie, which is close to the target Raspberry Pi environment (DietPi based on Debian Trixie).
 
 The instructions here are for Debian Trixie:
 
@@ -66,7 +70,19 @@ make
 ./start.sh
 ```
 
-**Tip:** If you want to see the app in a window instead of full screen, comment out the following line in `main.cpp`: `//window.setWindowState(Qt::WindowFullScreen);`
+**Local desktop build:** this installation uses the classic desktop layout: a 275×116 player window and a separate, compact playlist editor. The file picker opens as a separate system dialog.
+
+## YouTube streaming (local desktop integration)
+
+This local build accepts YouTube URLs from the command line or the playlist's **ADD** menu:
+
+```bash
+./start.sh 'https://youtu.be/S_gJpgFa6m0'
+```
+
+Linkamp legge il titolo e aggiunge l'URL della pagina alla playlist. `yt-dlp` risolve l'audio solo quando selezioni il brano, poi lo riproduce in streaming. L'audio viene bufferizzato per la riproduzione, senza salvare MP3 o altri file. Selezionare il brano successivo interrompe lo stream corrente.
+
+Il pulsante Chrome/Chromium **Aggiungi a Linkamp** si trova in [`chrome-extension/`](chrome-extension/README.md). Carica la cartella come estensione non pacchettizzata da `chrome://extensions/`; lo schema Linux `linkamp://` apre il player e passa il link alla playlist.
 
 ### Building a Debian package
 
@@ -76,12 +92,12 @@ On native Debian Trixie, you can build a package matching the CI `trixie` job wi
 ./build-deb.sh
 ```
 
-The script installs Debian packaging tools (`debhelper`, `devscripts`, `dh-python`, `dh-cmake`, and related packages), copies the tree to a local temp directory (so your git tree stays clean), runs `apt-get build-dep` for `debian/control`, builds with `dpkg-buildpackage`, and places the `.deb` in `~/linamp-debs/`.
+The script installs Debian packaging tools (`debhelper`, `devscripts`, `dh-python`, `dh-cmake`, and related packages), copies the tree to a local temp directory (so your git tree stays clean), runs `apt-get build-dep` for `debian/control`, builds with `dpkg-buildpackage`, and places the `.deb` in `~/linkamp-debs/`.
 
 You can install the newly built packages with the following command (replace placeholders accordingly):
 
 ```bash
-sudo apt install ./linamp_[version]_[arch].deb
+sudo apt install ./linkamp_[version]_[arch].deb
 ```
 
 ### Known issues

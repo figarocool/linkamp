@@ -4,7 +4,7 @@ import time
 from dbus_next.aio import MessageBus
 from dbus_next.service import ServiceInterface, method
 
-DBUS_INTERFACE = 'org.linamp.LibrespotInterface'
+DBUS_INTERFACE = 'org.linkamp.LibrespotInterface'
 
 class SpotifyTrackInfo():
     def __init__(self, title: str = '', track_number: int = 0, number_of_tracks: int = 0, duration: int = 0, album: str = '', artist: str = ''):
@@ -118,7 +118,7 @@ class SpotifyPlayerAdapter(ServiceInterface):
         
     async def loop(self):
         await self.setup()
-        await self.bus.request_name('org.linamp.Librespot')
+        await self.bus.request_name('org.linkamp.Librespot')
         await self.bus.wait_for_disconnect()
 
     def print_state(self):

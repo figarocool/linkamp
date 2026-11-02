@@ -445,6 +445,17 @@ void QMediaPlaylist::addMedia(const QUrl &content)
     emit mediaInserted(pos, pos);
 }
 
+void QMediaPlaylist::addMedia(const QUrl &content, const QMediaMetaData &metadata)
+{
+    addMedia(content);
+
+    Q_D(QMediaPlaylist);
+    m_mediaMetadata.insert(content, metadata);
+    const int position = d->playlist.lastIndexOf(content);
+    if (position >= 0)
+        emit mediaChanged(position, position);
+}
+
 /*!
   Append multiple media content \a items to the playlist.
 

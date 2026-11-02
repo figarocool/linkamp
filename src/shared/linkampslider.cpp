@@ -1,14 +1,14 @@
-#include "linampslider.h"
+#include "linkampslider.h"
 #include <QLinearGradient>
 #include <QPainter>
 
-LinampSlider::LinampSlider(QWidget* parent) :
+LinkampSlider::LinkampSlider(QWidget* parent) :
     QSlider(parent),
     gradient(QSize(100,100), QImage::Format_RGB32)
 {
 }
 
-void LinampSlider::setGradient(QColor from, QColor to, Qt::Orientation orientation)
+void LinkampSlider::setGradient(QColor from, QColor to, Qt::Orientation orientation)
 {
     setOrientation(orientation);
     // create linear gradient
@@ -26,7 +26,7 @@ void LinampSlider::setGradient(QColor from, QColor to, Qt::Orientation orientati
     changeColor(value());
 }
 
-void LinampSlider::setGradient(QList<QColor> steps, Qt::Orientation orientation)
+void LinkampSlider::setGradient(QList<QColor> steps, Qt::Orientation orientation)
 {
     setOrientation(orientation);
     // create linear gradient
@@ -45,7 +45,7 @@ void LinampSlider::setGradient(QList<QColor> steps, Qt::Orientation orientation)
     changeColor(value());
 }
 
-void LinampSlider::changeColor(int pos)
+void LinkampSlider::changeColor(int pos)
 {
     QColor color;
 

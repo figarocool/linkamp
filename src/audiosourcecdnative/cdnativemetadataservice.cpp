@@ -171,7 +171,7 @@ void CDNativeMetadataService::applyMusicBrainz(QList<CDNativeTrack> &tracks, con
     url.setQuery(query);
 
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::UserAgentHeader, "linamp-native-cd/1.0");
+    request.setHeader(QNetworkRequest::UserAgentHeader, "linkamp-native-cd/1.0");
     request.setTransferTimeout(5000);
 
     QNetworkAccessManager manager;

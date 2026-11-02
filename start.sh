@@ -15,4 +15,17 @@ elif wlr-randr --output Virtual-1 &>/dev/null; then
 fi
 
 source "$SCRIPT_DIR/venv/bin/activate"
-PYTHONPATH="$SCRIPT_DIR/python" "$SCRIPT_DIR/build/player"
+
+# yt-dlp uses the user's Node.js runtime for YouTube's JavaScript challenges.
+for node_bin in "$HOME"/.config/nvm/versions/node/*/bin; do
+    if [[ -x "$node_bin/node" ]]; then
+        PATH="$node_bin:$PATH"
+    fi
+done
+export PATH
+
+# Prefer Qt's FFmpeg media backend on desktop builds; the system GStreamer
+# backend emits a GLib critical when opening remote YouTube audio streams.
+export QT_MEDIA_BACKEND="${QT_MEDIA_BACKEND:-ffmpeg}"
+
+exec env PYTHONPATH="$SCRIPT_DIR/python" "$SCRIPT_DIR/build/player" "$@"

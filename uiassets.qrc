@@ -1,61 +1,61 @@
 <RCC>
     <qresource prefix="/">
-        <file>assets/next_p.png</file>
-        <file>assets/next.png</file>
-        <file>assets/open_p.png</file>
-        <file>assets/open.png</file>
-        <file>assets/pause_p.png</file>
-        <file>assets/pause.png</file>
-        <file>assets/play_p.png</file>
-        <file>assets/play.png</file>
-        <file>assets/prev_p.png</file>
-        <file>assets/prev.png</file>
-        <file>assets/stop_p.png</file>
-        <file>assets/stop.png</file>
-        <file>assets/posHandle_p.png</file>
-        <file>assets/posHandle.png</file>
-        <file>assets/eq_off_p.png</file>
-        <file>assets/eq_off.png</file>
-        <file>assets/eq_on_p.png</file>
-        <file>assets/eq_on.png</file>
-        <file>assets/eq_toggle_off_p.png</file>
-        <file>assets/eq_toggle_off.png</file>
-        <file>assets/eq_toggle_on_p.png</file>
-        <file>assets/eq_toggle_on.png</file>
-        <file>assets/eq_presets.png</file>
-        <file>assets/eq_presets_p.png</file>
-        <file>assets/eq_handle.png</file>
-        <file>assets/eq_handle_p.png</file>
-        <file>assets/pl_off_p.png</file>
-        <file>assets/pl_off.png</file>
-        <file>assets/pl_on_p.png</file>
-        <file>assets/pl_on.png</file>
-        <file>assets/repeat_off_p.png</file>
-        <file>assets/repeat_off.png</file>
-        <file>assets/repeat_on_p.png</file>
-        <file>assets/repeat_on.png</file>
-        <file>assets/shuffle_off_p.png</file>
-        <file>assets/shuffle_off.png</file>
-        <file>assets/shuffle_on_p.png</file>
-        <file>assets/shuffle_on.png</file>
-        <file>assets/balanceHandle_p.png</file>
-        <file>assets/balanceHandle.png</file>
-        <file>assets/volumeHandle_p.png</file>
-        <file>assets/volumeHandle.png</file>
-        <file>assets/visualizationBackground.png</file>
-        <file>assets/status_paused.png</file>
-        <file>assets/status_stopped.png</file>
-        <file>assets/status_playing.png</file>
+        <file alias="assets/next_p.png">skin/next_p.png</file>
+        <file alias="assets/next.png">skin/next.png</file>
+        <file alias="assets/open_p.png">skin/open_p.png</file>
+        <file alias="assets/open.png">skin/open.png</file>
+        <file alias="assets/pause_p.png">skin/pause_p.png</file>
+        <file alias="assets/pause.png">skin/pause.png</file>
+        <file alias="assets/play_p.png">skin/play_p.png</file>
+        <file alias="assets/play.png">skin/play.png</file>
+        <file alias="assets/prev_p.png">skin/prev_p.png</file>
+        <file alias="assets/prev.png">skin/prev.png</file>
+        <file alias="assets/stop_p.png">skin/stop_p.png</file>
+        <file alias="assets/stop.png">skin/stop.png</file>
+        <file alias="assets/posHandle_p.png">skin/posHandle_p.png</file>
+        <file alias="assets/posHandle.png">skin/posHandle.png</file>
+        <file alias="assets/eq_off_p.png">skin/eq_off_p.png</file>
+        <file alias="assets/eq_off.png">skin/eq_off.png</file>
+        <file alias="assets/eq_on_p.png">skin/eq_on_p.png</file>
+        <file alias="assets/eq_on.png">skin/eq_on.png</file>
+        <file alias="assets/eq_toggle_off_p.png">skin/eq_toggle_off_p.png</file>
+        <file alias="assets/eq_toggle_off.png">skin/eq_toggle_off.png</file>
+        <file alias="assets/eq_toggle_on_p.png">skin/eq_toggle_on_p.png</file>
+        <file alias="assets/eq_toggle_on.png">skin/eq_toggle_on.png</file>
+        <file alias="assets/eq_presets.png">skin/eq_presets.png</file>
+        <file alias="assets/eq_presets_p.png">skin/eq_presets_p.png</file>
+        <file alias="assets/eq_handle.png">skin/eq_handle.png</file>
+        <file alias="assets/eq_handle_p.png">skin/eq_handle_p.png</file>
+        <file alias="assets/pl_off_p.png">skin/pl_off_p.png</file>
+        <file alias="assets/pl_off.png">skin/pl_off.png</file>
+        <file alias="assets/pl_on_p.png">skin/pl_on_p.png</file>
+        <file alias="assets/pl_on.png">skin/pl_on.png</file>
+        <file alias="assets/repeat_off_p.png">skin/repeat_off_p.png</file>
+        <file alias="assets/repeat_off.png">skin/repeat_off.png</file>
+        <file alias="assets/repeat_on_p.png">skin/repeat_on_p.png</file>
+        <file alias="assets/repeat_on.png">skin/repeat_on.png</file>
+        <file alias="assets/shuffle_off_p.png">skin/shuffle_off_p.png</file>
+        <file alias="assets/shuffle_off.png">skin/shuffle_off.png</file>
+        <file alias="assets/shuffle_on_p.png">skin/shuffle_on_p.png</file>
+        <file alias="assets/shuffle_on.png">skin/shuffle_on.png</file>
+        <file alias="assets/balanceHandle_p.png">skin/balanceHandle_p.png</file>
+        <file alias="assets/balanceHandle.png">skin/balanceHandle.png</file>
+        <file alias="assets/volumeHandle_p.png">skin/volumeHandle_p.png</file>
+        <file alias="assets/volumeHandle.png">skin/volumeHandle.png</file>
+        <file alias="assets/visualizationBackground.png">skin/visualizationBackground.png</file>
+        <file alias="assets/status_paused.png">skin/status_paused.png</file>
+        <file alias="assets/status_stopped.png">skin/status_stopped.png</file>
+        <file alias="assets/status_playing.png">skin/status_playing.png</file>
         <file>assets/bignumbers.ttf</file>
-        <file>assets/pl_add_p.png</file>
-        <file>assets/pl_add.png</file>
-        <file>assets/pl_close_p.png</file>
-        <file>assets/pl_close.png</file>
-        <file>assets/scroll_handle_p.png</file>
-        <file>assets/scroll_handle.png</file>
-        <file>assets/windowClose.png</file>
-        <file>assets/windowMaximize.png</file>
-        <file>assets/windowMinimize.png</file>
+        <file alias="assets/pl_add_p.png">skin/pl_add_p.png</file>
+        <file alias="assets/pl_add.png">skin/pl_add.png</file>
+        <file alias="assets/pl_close_p.png">skin/pl_close_p.png</file>
+        <file alias="assets/pl_close.png">skin/pl_close.png</file>
+        <file alias="assets/scroll_handle_p.png">skin/scroll_handle_p.png</file>
+        <file alias="assets/scroll_handle.png">skin/scroll_handle.png</file>
+        <file alias="assets/windowClose.png">skin/classic-private/classic-close.png</file>
+        <file alias="assets/windowMaximize.png">skin/classic-private/classic-shade.png</file>
+        <file alias="assets/windowMinimize.png">skin/classic-private/classic-minimize.png</file>
         <file>styles/controlbuttonswidget.shuffleButton.4x.qss</file>
         <file>styles/controlbuttonswidget.shuffleButton.1x.qss</file>
         <file>styles/controlbuttonswidget.shuffleButton.2x.qss</file>
@@ -119,12 +119,17 @@
         <file>assets/fb_musicIcon.png</file>
         <file>assets/fb_folderIcon_selected.png</file>
         <file>assets/fb_musicIcon_selected.png</file>
-        <file>assets/logoButton.png</file>
+        <file alias="assets/logoButton.png">skin/logoButton.png</file>
         <file>assets/source-icon-bluetooth.png</file>
         <file>assets/source-icon-cd.png</file>
         <file>assets/source-icon-file.png</file>
         <file>assets/source-icon-spotify.png</file>
         <file>assets/menu-icon-x.png</file>
         <file>assets/eq-presets-builtin.json</file>
+        <file alias="assets/classic-main.png">skin/classic-private/classic-main.png</file>
+        <file alias="assets/classic-pledit.png">skin/classic-private/classic-pledit.png</file>
+        <file alias="assets/classic-eqmain.png">skin/classic-private/classic-eqmain.png</file>
+        <file alias="assets/classic-titlebar.png">skin/classic-private/classic-titlebar.png</file>
+        <file alias="assets/classic-menu.png">skin/classic-private/classic-menu.png</file>
     </qresource>
 </RCC>

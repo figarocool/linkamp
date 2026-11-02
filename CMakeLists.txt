@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(player VERSION 1.0 LANGUAGES C CXX)
+project(Linkamp VERSION 1.6.3 LANGUAGES C CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
@@ -88,6 +88,8 @@ qt_add_executable(player WIN32 MACOSX_BUNDLE
     src/view-basewindow/titlebar.ui
     src/view-playlist/filebrowsericonprovider.cpp
     src/view-playlist/filebrowsericonprovider.h
+    src/view-playlist/classicplaylistwindow.cpp
+    src/view-playlist/classicplaylistwindow.h
     src/view-playlist/playlistmodel.cpp
     src/view-playlist/playlistmodel.h
     src/view-playlist/playlistview.cpp
@@ -121,8 +123,8 @@ qt_add_executable(player WIN32 MACOSX_BUNDLE
     src/shared/fft.h
     src/shared/util.cpp
     src/shared/util.h
-    src/shared/linampslider.h
-    src/shared/linampslider.cpp
+    src/shared/linkampslider.h
+    src/shared/linkampslider.cpp
     src/main.cpp
     uiassets.qrc
 )

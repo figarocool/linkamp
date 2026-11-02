@@ -1,5 +1,7 @@
 #include <QTime>
 #include <QFileDialog>
+#include <QProcess>
+#include <QStandardPaths>
 
 #include "audiosourcefile.h"
 #include "util.h"
@@ -12,7 +14,16 @@ AudioSourceFile::AudioSourceFile(QObject *parent, PlaylistModel *playlistModel)
 {
     m_player = new MediaPlayer(this);
 
-    connect(m_player, &MediaPlayer::durationChanged, this, &AudioSourceFile::durationChanged);
+    connect(m_player, &MediaPlayer::durationChanged, this, [this](qint64 duration) {
+        const QUrl currentMedia = m_playlist->currentQueueMedia();
+        if (isYouTubeUrl(currentMedia)) {
+            const qint64 playlistDuration = m_playlist->queueMediaMetadata(
+                m_playlist->currentQueueIndex()).value(QMediaMetaData::Duration).toLongLong();
+            if (playlistDuration > 0)
+                duration = playlistDuration;
+        }
+        emit durationChanged(duration);
+    });
     connect(m_player, &MediaPlayer::positionChanged, this, &AudioSourceFile::positionChanged);
     connect(m_player, QOverload<>::of(&MediaPlayer::metaDataChanged), this,
             &AudioSourceFile::handleMetaDataChanged);
@@ -36,8 +47,10 @@ void AudioSourceFile::activate()
 {
     emit playbackStateChanged(m_player->playbackState());
     emit positionChanged(m_player->position());
-    emit metadataChanged(m_player->metaData());
-    emit durationChanged(m_player->duration());
+    const QMediaMetaData metadata = currentMetaData();
+    emit metadataChanged(metadata);
+    const qint64 duration = metadata.value(QMediaMetaData::Duration).toLongLong();
+    emit durationChanged(duration > 0 ? duration : m_player->duration());
     emit eqEnabledChanged(false);
     emit plEnabledChanged(true);
     emit shuffleEnabledChanged(shuffleEnabled);
@@ -54,6 +67,12 @@ void AudioSourceFile::deactivate()
 {
     // Stop everything
     shouldBePlaying = false;
+    if (m_youtubeResolveProcess) {
+        QProcess *process = m_youtubeResolveProcess;
+        m_youtubeResolveProcess = nullptr;
+        process->kill();
+        process->deleteLater();
+    }
     stopSpectrum();
     m_player->stop();
 }
@@ -66,20 +85,28 @@ void AudioSourceFile::handlePl()
 
 void AudioSourceFile::handlePrevious()
 {
-    // Go to previous track if we are within the first 5 seconds of playback
-    // Otherwise, seek to the beginning.
-    if (m_player->position() <= 5000) {
-        // If is first item in playlist, do nothing
-        // That's handled by QMediaPlaylist
-        m_playlist->previous();
-    } else {
-        m_player->setPosition(0);
-    }
+    // The previous-track control always navigates the playlist. Seeking is
+    // handled by the position slider, independently of the current position.
+    m_playlist->previous();
 }
 
 void AudioSourceFile::handlePlay()
 {
     shouldBePlaying = true;
+    if (m_playlist->currentIndex() < 0 && m_playlist->mediaCount() > 0) {
+        m_playlist->setCurrentIndex(0);
+        return;
+    }
+    const QUrl currentMedia = m_playlist->currentQueueMedia();
+    if (isYouTubeUrl(currentMedia)) {
+        if (m_resolvedYouTubeMedia == currentMedia) {
+            m_player->play();
+            startSpectrum();
+            return;
+        }
+        handlePlaylistPositionChanged(m_playlist->currentIndex());
+        return;
+    }
     m_player->play();
     startSpectrum();
 }
@@ -94,6 +121,12 @@ void AudioSourceFile::handlePause()
 void AudioSourceFile::handleStop()
 {
     shouldBePlaying = false;
+    if (m_youtubeResolveProcess) {
+        QProcess *process = m_youtubeResolveProcess;
+        m_youtubeResolveProcess = nullptr;
+        process->kill();
+        process->deleteLater();
+    }
     m_player->stop();
     stopSpectrum();
 }
@@ -109,7 +142,7 @@ void AudioSourceFile::handleNext()
 
 void AudioSourceFile::handleOpen()
 {
-    emit showPlaylistRequested();
+    emit openFilesRequested();
 }
 
 void AudioSourceFile::handleShuffle()
@@ -136,8 +169,11 @@ void AudioSourceFile::handleSeek(int mseconds)
 
 void AudioSourceFile::handleMetaDataChanged()
 {
-    auto metaData = m_player->metaData();
-    emit metadataChanged(metaData);
+    const QMediaMetaData metadata = currentMetaData();
+    emit metadataChanged(metadata);
+    const qint64 duration = metadata.value(QMediaMetaData::Duration).toLongLong();
+    if (duration > 0)
+        emit durationChanged(duration);
 }
 
 void AudioSourceFile::handleMediaStatusChanged(MediaPlayer::MediaStatus status)
@@ -202,7 +238,93 @@ void AudioSourceFile::setStatusInfo(const QString &info)
 
 void AudioSourceFile::handlePlaylistPositionChanged(int)
 {
-    m_player->setSource(m_playlist->currentQueueMedia());
+    m_resolvedYouTubeMedia = QUrl();
+    if (m_youtubeResolveProcess) {
+        QProcess *previousProcess = m_youtubeResolveProcess;
+        m_youtubeResolveProcess = nullptr;
+        previousProcess->kill();
+        previousProcess->deleteLater();
+    }
+
+    const QUrl media = m_playlist->currentQueueMedia();
+    if (isYouTubeUrl(media)) {
+        m_player->stop();
+        m_player->clearSource();
+        stopSpectrum();
+
+        const QMediaMetaData metadata = currentMetaData();
+        emit metadataChanged(metadata);
+        emit durationChanged(metadata.value(QMediaMetaData::Duration).toLongLong());
+
+        const QString ytDlp = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
+        if (ytDlp.isEmpty()) {
+            setStatusInfo(tr("yt-dlp non trovato"));
+            return;
+        }
+
+        setStatusInfo(tr("Connessione a YouTube…"));
+        auto *process = new QProcess(this);
+        m_youtubeResolveProcess = process;
+        connect(process, &QProcess::finished, this,
+                [this, process, media](int exitCode, QProcess::ExitStatus) {
+            const QString output = QString::fromUtf8(process->readAllStandardOutput()).trimmed();
+            const QString errorOutput = QString::fromUtf8(process->readAllStandardError()).trimmed();
+            if (m_youtubeResolveProcess != process) {
+                process->deleteLater();
+                return;
+            }
+            m_youtubeResolveProcess = nullptr;
+            process->deleteLater();
+
+            if (m_playlist->currentQueueMedia() != media)
+                return;
+            if (exitCode != 0) {
+                setStatusInfo(errorOutput.isEmpty() ? tr("Impossibile aprire il link YouTube")
+                                                    : errorOutput.left(180));
+                return;
+            }
+
+            QString streamUrl;
+            const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+            for (const QString &line : lines) {
+                const QString candidate = line.trimmed();
+                if (candidate.startsWith(QLatin1String("https://"))
+                    || candidate.startsWith(QLatin1String("http://"))) {
+                    streamUrl = candidate;
+                }
+            }
+            const QUrl resolvedUrl(streamUrl);
+            if (streamUrl.isEmpty() || !resolvedUrl.isValid()) {
+                setStatusInfo(tr("YouTube non ha restituito uno stream audio"));
+                return;
+            }
+
+            setStatusInfo(QString());
+            m_resolvedYouTubeMedia = media;
+            m_player->setSource(resolvedUrl);
+            if (shouldBePlaying) {
+                m_player->play();
+                startSpectrum();
+            }
+        });
+        connect(process, &QProcess::errorOccurred, this,
+                [this, process](QProcess::ProcessError error) {
+            if (error != QProcess::FailedToStart || m_youtubeResolveProcess != process)
+                return;
+            m_youtubeResolveProcess = nullptr;
+            setStatusInfo(tr("Impossibile avviare yt-dlp"));
+            process->deleteLater();
+        });
+        process->start(ytDlp, {
+            QStringLiteral("--no-playlist"), QStringLiteral("--no-warnings"),
+            QStringLiteral("--quiet"), QStringLiteral("-f"),
+            QStringLiteral("bestaudio[ext=m4a]/bestaudio"), QStringLiteral("--get-url"),
+            QStringLiteral("--"), media.toString(QUrl::FullyEncoded)
+        });
+        return;
+    }
+
+    m_player->setSource(media);
 
     if (shouldBePlaying) {
         m_player->play();
@@ -227,10 +349,11 @@ void AudioSourceFile::handlePlaylistMediaRemoved(int from, int to)
 void AudioSourceFile::jump(const QModelIndex &index)
 {
     if (index.isValid()) {
-        m_playlist->setCurrentIndex(index.row());
         shouldBePlaying = true;
-        m_player->play();
-        startSpectrum();
+        const int previousIndex = m_playlist->currentIndex();
+        m_playlist->setCurrentIndex(index.row());
+        if (previousIndex == index.row())
+            handlePlaylistPositionChanged(index.row());
     }
 }
 
@@ -250,4 +373,33 @@ void AudioSourceFile::addToPlaylist(const QList<QUrl> &urls)
             jump(index);
         }
     }
+}
+
+
+void AudioSourceFile::addYouTubeToPlaylist(const QUrl &url, const QMediaMetaData &metadata)
+{
+    if (isYouTubeUrl(url))
+        m_playlist->addMedia(url, metadata);
+}
+
+QMediaMetaData AudioSourceFile::currentMetaData() const
+{
+    QMediaMetaData metadata = m_player->metaData();
+    const int queueIndex = m_playlist->currentQueueIndex();
+    const QUrl media = m_playlist->queueMedia(queueIndex);
+    if (!isYouTubeUrl(media))
+        return metadata;
+
+    const QMediaMetaData playlistMetadata = m_playlist->queueMediaMetadata(queueIndex);
+    const QString title = playlistMetadata.value(QMediaMetaData::Title).toString();
+    const QString artist = playlistMetadata.value(QMediaMetaData::AlbumArtist).toString();
+    const qint64 duration = playlistMetadata.value(QMediaMetaData::Duration).toLongLong();
+    if (!title.isEmpty())
+        metadata.insert(QMediaMetaData::Title, title);
+    if (!artist.isEmpty())
+        metadata.insert(QMediaMetaData::AlbumArtist, artist);
+    if (duration > 0)
+        metadata.insert(QMediaMetaData::Duration, duration);
+    metadata.insert(QMediaMetaData::Url, media);
+    return metadata;
 }
