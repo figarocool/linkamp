@@ -19,8 +19,8 @@ ControlButtonsWidget::ControlButtonsWidget(QWidget *parent) :
     connect(ui->openButton, &QPushButton::clicked, this, &ControlButtonsWidget::openClicked);
     connect(ui->repeatButton, &QCheckBox::clicked, this, &ControlButtonsWidget::repeatClicked);
     connect(ui->shuffleButton, &QCheckBox::clicked, this, &ControlButtonsWidget::shuffleClicked);
-    ui->repeatButton->setChecked(false);
-    ui->shuffleButton->setChecked(false);
+    ui->repeatButton->setChecked(true);
+    ui->shuffleButton->setChecked(true);
 }
 
 ControlButtonsWidget::~ControlButtonsWidget()

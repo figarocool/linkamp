@@ -106,6 +106,8 @@ static void renderBitmapTextPl(QPainter &p, const QString &text, int startX, int
             row = 1; col = 29;
         } else if (ch == QLatin1Char('#')) {
             row = 1; col = 30;
+        } else if (ch == QLatin1Char('?')) {
+            row = 2; col = 3;
         } else if (ch == QLatin1Char(' ')) {
             if (selected) {
                 p.fillRect(curX, startY, 5, 6, QColor(0, 190, 0));
@@ -271,15 +273,6 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
     }
     blit(bottomX, bottomY, width() - bottomX, 38, 126, 72, 150, 38);
 
-    const int buttonY = height() - 30;
-    // Draw the five idle buttons from the main Pledit sheet. Popup rows and
-    // their vertical separators are drawn only while their menus are open.
-    blit(11, buttonY, 25, 18, 11, 80, 25, 18);
-    blit(40, buttonY, 25, 18, 40, 80, 25, 18);
-    blit(69, buttonY, 25, 18, 69, 80, 25, 18);
-    blit(98, buttonY, 25, 18, 98, 80, 25, 18);
-    blit(width() - 46, buttonY, 25, 18, 229, 80, 25, 18);
-
     const int thumbHeight = 18;
     const int visibleRows = std::max(1, (height() - 38 - 20 - 2) / kRowHeight);
     const int maxFirstRow = std::max(0, m_playlist->mediaCount() - visibleRows);
@@ -335,18 +328,19 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         }
     }
 
-    if (m_playlist->mediaCount() > 0 && m_playlist->totalDuration() > 0) {
-        const QString currentTime = formatDuration(m_position);
-        const QString totalTime = formatDuration(m_playlist->totalDuration());
-        const QString comboTime = currentTime + QLatin1Char('/') + totalTime;
+    const QString currentTime = formatDuration(m_position);
+    const QString totalTime = formatDuration(m_playlist->totalDuration());
+    const QString comboTime = (m_playlist->mediaCount() > 0 && m_playlist->totalDuration() > 0)
+        ? (currentTime + QLatin1Char('/') + totalTime)
+        : QStringLiteral("0:00/?");
 
-        // Top LCD box (track time / total time): right-aligned inside LCD box
-        const int topLcdX = (width() - 150 + 94) - comboTime.length() * 5;
-        renderBitmapTextPl(painter, comboTime, topLcdX, height() - 28, false);
+    // Top LCD box (track time / total time): left-aligned starting at width() - 143 (132), height() - 28 (88)
+    renderBitmapTextPl(painter, comboTime, width() - 143, height() - 28, false);
 
-        // Bottom LCD box (current track time): right-aligned inside LCD box
-        const int botLcdX = (width() - 150 + 94) - currentTime.length() * 5;
-        renderBitmapTextPl(painter, currentTime, botLcdX, height() - 16, false);
+    // Bottom LCD box (current track time): only rendered when playing (m_position > 0)
+    if (m_position > 0) {
+        const int botLcdX = (width() - 86);
+        renderBitmapTextPl(painter, currentTime, botLcdX, height() - 15, false);
     }
 }
 

@@ -1548,7 +1548,7 @@ QCheckBox::indicator:indeterminate:pressed {
          </property>
          <property name="styleSheet">
           <string notr="true">QSlider::handle:horizontal {
-	width: 28px;
+	width: 29px;
 	height: 10px;
 	background-color: transparent;
 	border-image: url(:assets/posHandle.png);
@@ -1565,15 +1565,8 @@ QSlider::groove:horizontal {
 }
 
 #posBar {
-	background-color: #2c2b43;
-	border-top: 2px solid #26253c;
-	border-right: 1px solid #6d6d7f;
-	border-bottom: 1px solid #6d6d7f;
-	border-left: 2px solid #26253c;
-	padding-top: -2px;
-	padding-right: -1px;
-	padding-bottom: -1px;
-	padding-left: -2px;
+	background: transparent;
+	border: 0;
 }</string>
          </property>
          <property name="orientation">

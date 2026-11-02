@@ -61,6 +61,7 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
 
     // duration slider and label
     ui->posBar->setRange(0, 0);
+    ui->posBar->setVisible(false);
     connect(ui->posBar, &QSlider::sliderPressed, this, [this]() {
         if (!m_deferredSeekEnabled) {
             return;
@@ -365,6 +366,7 @@ void PlayerView::setDuration(qint64 duration)
 {
     m_duration = duration / 1000;
     ui->posBar->setMaximum(duration);
+    ui->posBar->setVisible(duration > 0);
 }
 
 void PlayerView::setVolume(int volume)
