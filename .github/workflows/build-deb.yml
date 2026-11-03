@@ -198,22 +198,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          host: mac
-          target: desktop
-          arch: arm64
-          modules: qtmultimedia
-          cache: true
       - name: Install native dependencies
-        run: brew install taglib libarchive
+        run: brew install qt taglib libarchive
       - name: Build and deploy Linkamp
         run: |
           LINKAMP_BUILD_VERSION="${GITHUB_REF_NAME#v}"
           [[ "$LINKAMP_BUILD_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] || LINKAMP_BUILD_VERSION=1.6.3
           export LINKAMP_BUILD_VERSION
-          cmake -S . -B build -DLINKAMP_ENABLE_LINUX_INTEGRATIONS=OFF
+          qt_prefix="$(brew --prefix qt)"
+          export PATH="$qt_prefix/bin:$PATH"
+          cmake -S . -B build -DLINKAMP_ENABLE_LINUX_INTEGRATIONS=OFF \
+            -DCMAKE_PREFIX_PATH="$qt_prefix" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
           cmake --build build --config Release --parallel 2
           cmake --install build --config Release --prefix "$RUNNER_TEMP/linkamp-stage"
       - name: Install Qt Installer Framework
@@ -244,6 +240,8 @@ jobs:
             -ov -format UDZO "$RUNNER_TEMP/Linkamp-Installer-macos-arm64.dmg"
           mkdir -p "$RUNNER_TEMP/update-packages"
           cp -R "ifw/packages/$package_id" "$RUNNER_TEMP/update-packages/"
+          tar -czf "$RUNNER_TEMP/linkamp-macos-arm64-update-package.tar.gz" \
+            -C "$RUNNER_TEMP/update-packages" "$package_id"
       - uses: actions/upload-artifact@v7
         with:
           name: linkamp-macos-arm64-installer
@@ -251,7 +249,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: linkamp-macos-arm64-update-package
-          path: ${{ runner.temp }}/update-packages/org.linkamp.player.macos.arm64
+          path: ${{ runner.temp }}/linkamp-macos-arm64-update-package.tar.gz
 
 
   build-macos-x64:
@@ -274,7 +272,8 @@ jobs:
           LINKAMP_BUILD_VERSION="${GITHUB_REF_NAME#v}"
           [[ "$LINKAMP_BUILD_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] || LINKAMP_BUILD_VERSION=1.6.3
           export LINKAMP_BUILD_VERSION
-          cmake -S . -B build -DLINKAMP_ENABLE_LINUX_INTEGRATIONS=OFF
+          cmake -S . -B build -DLINKAMP_ENABLE_LINUX_INTEGRATIONS=OFF \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
           cmake --build build --config Release --parallel 2
           cmake --install build --config Release --prefix "$RUNNER_TEMP/linkamp-stage"
       - name: Install Qt Installer Framework
@@ -305,6 +304,8 @@ jobs:
             -ov -format UDZO "$RUNNER_TEMP/Linkamp-Installer-macos-x64.dmg"
           mkdir -p "$RUNNER_TEMP/update-packages"
           cp -R "ifw/packages/$package_id" "$RUNNER_TEMP/update-packages/"
+          tar -czf "$RUNNER_TEMP/linkamp-macos-x64-update-package.tar.gz" \
+            -C "$RUNNER_TEMP/update-packages" "$package_id"
       - uses: actions/upload-artifact@v7
         with:
           name: linkamp-macos-x64-installer
@@ -312,7 +313,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: linkamp-macos-x64-update-package
-          path: ${{ runner.temp }}/update-packages/org.linkamp.player.macos.x64
+          path: ${{ runner.temp }}/linkamp-macos-x64-update-package.tar.gz
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -383,10 +384,10 @@ jobs:
                    "$update_site/updates"
           cp -R release-artifacts/linkamp-windows-update-package/. \
             "$update_packages/org.linkamp.player.windows/"
-          cp -R release-artifacts/linkamp-macos-arm64-update-package/. \
-            "$update_packages/org.linkamp.player.macos.arm64/"
-          cp -R release-artifacts/linkamp-macos-x64-update-package/. \
-            "$update_packages/org.linkamp.player.macos.x64/"
+          tar -xzf release-artifacts/linkamp-macos-arm64-update-package/linkamp-macos-arm64-update-package.tar.gz \
+            -C "$update_packages"
+          tar -xzf release-artifacts/linkamp-macos-x64-update-package/linkamp-macos-x64-update-package.tar.gz \
+            -C "$update_packages"
           ifw_bin="$RUNNER_TEMP/Qt/Tools/QtInstallerFramework/4.7/bin"
           "$ifw_bin/repogen" -p "$update_packages" -i org.linkamp.player.windows \
             "$update_site/updates/windows"
