@@ -155,7 +155,8 @@ jobs:
             -DLINKAMP_ENABLE_LINUX_INTEGRATIONS=OFF
           cmake --build build --config Release --parallel 2
           cmake --install build --config Release --prefix "$RUNNER_TEMP/linkamp-stage"
-          cp build/vcpkg_installed/x64-windows/bin/*.dll "$RUNNER_TEMP/linkamp-stage/bin/"
+          cp "$VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin/"*.dll \
+            "$RUNNER_TEMP/linkamp-stage/bin/"
       - name: Install Qt Installer Framework
         shell: bash
         run: |
