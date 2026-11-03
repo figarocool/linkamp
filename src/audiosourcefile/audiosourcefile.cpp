@@ -43,6 +43,11 @@ AudioSourceFile::AudioSourceFile(QObject *parent, PlaylistModel *playlistModel)
 
 }
 
+void AudioSourceFile::setOutputVolume(int volume)
+{
+    m_player->setVolume(qBound(0, volume, 100) / 100.0f);
+}
+
 void AudioSourceFile::activate()
 {
     emit playbackStateChanged(m_player->playbackState());

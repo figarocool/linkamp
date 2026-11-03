@@ -1,4 +1,5 @@
 #include "equalizerview.h"
+#include "winampskin.h"
 #include "equalizergraph.h"
 #include "equalizerpresetview.h"
 #include "equalizerbands.h"
@@ -36,7 +37,8 @@ protected:
     void paintEvent(QPaintEvent *event) override
     {
         Q_UNUSED(event);
-        static const QPixmap sprite(QStringLiteral(":/assets/classic-eqmain.png"));
+        const QPixmap sprite = QPixmap::fromImage(
+            WinampSkin::instance().sheet(QStringLiteral("eqmain")));
         if (sprite.isNull())
             return;
         QPainter painter(this);
@@ -177,7 +179,8 @@ EqualizerView::EqualizerView(SystemEqualizer *equalizer, QWidget *parent)
 void EqualizerView::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
-    static const QPixmap sprite(QStringLiteral(":/assets/classic-eqmain.png"));
+    const QPixmap sprite = QPixmap::fromImage(
+        WinampSkin::instance().sheet(QStringLiteral("eqmain")));
     if (sprite.isNull())
         return;
 

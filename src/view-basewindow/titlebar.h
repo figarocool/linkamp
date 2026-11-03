@@ -39,6 +39,7 @@ protected:
 private:
     Ui::TitleBar *ui;
     void scale();
+    QString m_title = QStringLiteral("LINKAMP");
     QPointF m_pCursor;
     bool m_dragging = false;
     bool m_classicEqualizerStyle = false;

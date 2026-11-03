@@ -10,6 +10,7 @@ class AudioSource : public QObject
     Q_OBJECT
 public:
     explicit AudioSource(QObject *parent = nullptr);
+    virtual void setOutputVolume(int volume);
 
 signals:
     void playbackStateChanged(MediaPlayer::PlaybackState state);

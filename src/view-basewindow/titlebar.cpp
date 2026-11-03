@@ -1,8 +1,10 @@
 #include "titlebar.h"
 #include "ui_titlebar.h"
 #include "scale.h"
+#include "winampskin.h"
 #include <QMouseEvent>
 #include <QPainter>
+#include <QFont>
 
 #include <utility>
 
@@ -33,7 +35,9 @@ TitleBar::~TitleBar()
 
 void TitleBar::setTitle(const QString &title)
 {
+    m_title = title.toUpper();
     ui->windowTitle->setText(title);
+    update();
 }
 
 void TitleBar::setClassicEqualizerStyle()
@@ -142,11 +146,44 @@ bool TitleBar::eventFilter(QObject *watched, QEvent *event)
 void TitleBar::paintEvent(QPaintEvent *event)
 {
     if (!m_classicEqualizerStyle) {
-        const QPixmap sprite(QStringLiteral(":/assets/classic-titlebar.png"));
+        const QPixmap sprite = QPixmap::fromImage(
+            WinampSkin::instance().sheet(QStringLiteral("classic-titlebar")));
         if (!sprite.isNull()) {
             QPainter painter(this);
             const int titleY = (window() && window()->isActiveWindow()) ? 0 : 14;
             painter.drawPixmap(rect(), sprite, QRect(0, titleY, 275, 14));
+            if (!WinampSkin::instance().isLoaded() && titleY != 0) {
+                // The bundled inactive titlebar atlas has a stray square in
+                // this otherwise plain rail. Reuse the adjacent rail pixels.
+                painter.drawPixmap(QRect(59, 0, 22, 14), sprite,
+                                   QRect(80, titleY, 22, 14));
+            }
+            if (!WinampSkin::instance().isLoaded()) {
+                const QPixmap linkampMark(QStringLiteral(":/assets/linkamp-mark.png"));
+                if (!linkampMark.isNull()) {
+                    painter.save();
+                    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+                    painter.drawPixmap(QRect(14, 2, 8, 8), linkampMark);
+                    painter.restore();
+                }
+            }
+
+            // Keep the original Winamp titlebar artwork while using Linkamp's
+            // name in the logo slot baked into the classic sprite.
+            if (!m_title.isEmpty()) {
+                painter.save();
+                painter.scale(width() / 275.0, height() / 14.0);
+                painter.fillRect(QRect(111, 4, 53, 7), QColor(24, 24, 41));
+                painter.setRenderHint(QPainter::TextAntialiasing, false);
+                QFont titleFont(QStringLiteral("DejaVu Sans Mono"));
+                titleFont.setPixelSize(8);
+                titleFont.setBold(true);
+                titleFont.setStyleStrategy(QFont::NoAntialias);
+                painter.setFont(titleFont);
+                painter.setPen(QColor(192, 192, 192));
+                painter.drawText(QRect(111, 1, 53, 12), Qt::AlignCenter, m_title);
+                painter.restore();
+            }
             return;
         }
         QWidget::paintEvent(event);
@@ -154,7 +191,8 @@ void TitleBar::paintEvent(QPaintEvent *event)
     }
 
     Q_UNUSED(event);
-    const QPixmap sprite(QStringLiteral(":/assets/classic-eqmain.png"));
+    const QPixmap sprite = QPixmap::fromImage(
+        WinampSkin::instance().sheet(QStringLiteral("eqmain")));
     if (sprite.isNull())
         return;
 

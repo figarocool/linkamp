@@ -3,6 +3,7 @@
 
 #include "scale.h"
 #include "util.h"
+#include "winampskin.h"
 
 #include <QApplication>
 #include <QAudioDevice>
@@ -15,6 +16,11 @@
 #include <QMessageBox>
 #include <QStandardPaths>
 #include <QFontDatabase>
+#include <QSettings>
+#include <QSpacerItem>
+#include <QMouseEvent>
+#include <QStyle>
+#include <QStyleOptionSlider>
 
 PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     QWidget(parent),
@@ -26,6 +32,66 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     // Setup UI
     ui->setupUi(this);
     scale();
+    m_timeLeftMode = QSettings().value(QStringLiteral("player/timeLeftMode"), true).toBool();
+    ui->progressTimeLabel->installEventFilter(this);
+    ui->posBar->installEventFilter(this);
+    // Keep the Classic volume controls out of the compressed right-column
+    // layout. Their 13px sprite tracks extend below that row and get clipped
+    // as soon as the seek bar becomes active.
+    QHBoxLayout *controlsLayout = ui->horizontalLayout_7;
+    controlsLayout->removeWidget(ui->volumeSlider);
+    controlsLayout->removeWidget(ui->balanceSlider);
+    controlsLayout->removeWidget(ui->eqButton);
+    controlsLayout->removeWidget(ui->playlistButton);
+    ui->volumeSlider->setParent(this);
+    ui->balanceSlider->setParent(this);
+    ui->eqButton->setParent(this);
+    ui->playlistButton->setParent(this);
+    controlsLayout->insertSpacerItem(0, new QSpacerItem(
+        68 * UI_SCALE, 1, QSizePolicy::Fixed, QSizePolicy::Minimum));
+    controlsLayout->insertSpacerItem(2, new QSpacerItem(
+        38 * UI_SCALE, 1, QSizePolicy::Fixed, QSizePolicy::Minimum));
+    controlsLayout->insertSpacerItem(4, new QSpacerItem(
+        23 * UI_SCALE, 1, QSizePolicy::Fixed, QSizePolicy::Minimum));
+    controlsLayout->insertSpacerItem(5, new QSpacerItem(
+        23 * UI_SCALE, 1, QSizePolicy::Fixed, QSizePolicy::Minimum));
+    ui->volumeSlider->setMinimumHeight(13 * UI_SCALE);
+    ui->volumeSlider->setMaximumHeight(13 * UI_SCALE);
+    ui->balanceSlider->setMinimumHeight(13 * UI_SCALE);
+    ui->balanceSlider->setMaximumHeight(13 * UI_SCALE);
+    ui->volumeSlider->setGeometry(103 * UI_SCALE, 42 * UI_SCALE,
+                                  68 * UI_SCALE, 13 * UI_SCALE);
+    ui->balanceSlider->setGeometry(173 * UI_SCALE, 42 * UI_SCALE,
+                                   38 * UI_SCALE, 13 * UI_SCALE);
+    ui->eqButton->setGeometry(215 * UI_SCALE, 43 * UI_SCALE,
+                              23 * UI_SCALE, 12 * UI_SCALE);
+    ui->playlistButton->setGeometry(238 * UI_SCALE, 43 * UI_SCALE,
+                                    23 * UI_SCALE, 12 * UI_SCALE);
+    ui->volumeSlider->raise();
+    ui->balanceSlider->raise();
+    ui->eqButton->raise();
+    ui->playlistButton->raise();
+    auto *visualModeLabels = new QLabel(this);
+    visualModeLabels->setObjectName(QStringLiteral("classicVisualModeLabels"));
+    visualModeLabels->setAttribute(Qt::WA_TransparentForMouseEvents);
+    visualModeLabels->setStyleSheet(QStringLiteral("background: transparent;"));
+    const QImage titlebarAtlas = WinampSkin::instance().sheet(QStringLiteral("titlebar-atlas"));
+    if (!titlebarAtlas.isNull())
+        visualModeLabels->setPixmap(QPixmap::fromImage(titlebarAtlas.copy(304, 0, 8, 43)));
+    visualModeLabels->setGeometry(QRect(ui->visualizationBackground->mapTo(
+                                            this, QPoint(2, 7 * UI_SCALE)),
+                                        QSize(8, 43)));
+    ui->monoLabel->hide();
+    ui->stereoLabel->hide();
+    m_monoIndicator = new QLabel(this);
+    m_monoIndicator->setObjectName(QStringLiteral("classicMonoIndicator"));
+    m_monoIndicator->setGeometry(208 * UI_SCALE, 26 * UI_SCALE, 27 * UI_SCALE, 12 * UI_SCALE);
+    m_monoIndicator->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_stereoIndicator = new QLabel(this);
+    m_stereoIndicator->setObjectName(QStringLiteral("classicStereoIndicator"));
+    m_stereoIndicator->setGeometry(235 * UI_SCALE, 26 * UI_SCALE, 29 * UI_SCALE, 12 * UI_SCALE);
+    m_stereoIndicator->setAttribute(Qt::WA_TransparentForMouseEvents);
+    setChannelIndicators(false, false);
     QFont tickerFont = ui->songInfoLabel->font();
     tickerFont.setFamily(QStringLiteral("DejaVu Sans Mono"));
     tickerFont.setPixelSize(6 * UI_SCALE);
@@ -61,7 +127,7 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
 
     // duration slider and label
     ui->posBar->setRange(0, 0);
-    ui->posBar->setVisible(false);
+    ui->posBar->setVisible(true);
     connect(ui->posBar, &QSlider::sliderPressed, this, [this]() {
         if (!m_deferredSeekEnabled) {
             return;
@@ -125,17 +191,24 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
 
     // Reset time counter and labels
     ui->progressTimeLabel->setText("");
-    ui->volumeSlider->setValue(84);
+    const int playerVolume = qBound(0, QSettings().value(QStringLiteral("player/volume"), 84).toInt(), 100);
+    ui->volumeSlider->setValue(playerVolume);
+    connect(ui->volumeSlider, &QSlider::valueChanged, this, [](int value) {
+        QSettings().setValue(QStringLiteral("player/volume"), value);
+    });
     ui->balanceSlider->setValue(0);
     ui->playlistButton->setChecked(true);
     ui->eqButton->setChecked(false);
     ui->kbpsValueLabel->setText("");
     ui->khzValueLabel->setText("");
-    ui->monoLabel->setText("");
-    ui->stereoLabel->setText("");
     ui->inputLabel->hide();
-    ui->kbpsLabel->hide();
     ui->kHzLabel->hide();
+    // MAIN.BMP already contains the white "kbps" legend. Keep the label's
+    // layout width so the second value frame stays over its bitmap box, while
+    // making the duplicate QLabel text transparent.
+    ui->kbpsLabel->setFixedWidth(17 * UI_SCALE);
+    ui->kbpsLabel->setStyleSheet(QStringLiteral("color: transparent; background: transparent;"));
+    ui->kbpsLabel->show();
 
     // Set play status icon
     setPlaybackState(MediaPlayer::StoppedState);
@@ -170,15 +243,19 @@ void PlayerView::scale()
 
     ui->posBarContainer->layout()->setContentsMargins(ui->posBarContainer->layout()->contentsMargins() * UI_SCALE);
 
-    ui->posBar->setMaximumHeight(ui->posBar->maximumHeight() * UI_SCALE);
-    ui->posBar->setMinimumHeight(ui->posBar->minimumHeight() * UI_SCALE);
-    ui->posBar->setStyleSheet(getStylesheet("playerview.posBar"));
+    ui->posBar->setMaximumHeight(16 * UI_SCALE);
+    ui->posBar->setMinimumHeight(16 * UI_SCALE);
+    updatePositionSliderStyle();
 
     ui->infoContainer->setContentsMargins(ui->infoContainer->contentsMargins() * UI_SCALE);
-    ui->visualizationContainer->setContentsMargins(ui->visualizationContainer->contentsMargins() * UI_SCALE);
+    QMargins visualizationMargins = ui->visualizationContainer->contentsMargins() * UI_SCALE;
+    visualizationMargins.setTop(std::max(0, visualizationMargins.top() - UI_SCALE));
+    ui->visualizationContainer->setContentsMargins(visualizationMargins);
 
     ui->codecDetailsContainer->layout()->setContentsMargins(ui->codecDetailsContainer->layout()->contentsMargins() * UI_SCALE);
     ui->codecDetailsContainer->layout()->setSpacing(ui->codecDetailsContainer->layout()->spacing() * UI_SCALE);
+    ui->horizontalSpacer_5->changeSize(6 * UI_SCALE, UI_SCALE,
+                                       QSizePolicy::Fixed, QSizePolicy::Minimum);
     ui->codecDetailsContainer->setStyleSheet(getStylesheet("playerview.codecDetailsContainer"));
 
 
@@ -235,19 +312,23 @@ void PlayerView::scale()
     ui->playStatusIcon->setMaximumSize(ui->playStatusIcon->maximumSize() * UI_SCALE);
     ui->playStatusIcon->setMinimumSize(ui->playStatusIcon->minimumSize() * UI_SCALE);
     QRect psiGeo = ui->playStatusIcon->geometry();
-    ui->playStatusIcon->setGeometry(psiGeo.x()*UI_SCALE, psiGeo.y()*UI_SCALE, psiGeo.width(), psiGeo.height());
+    ui->playStatusIcon->setGeometry(psiGeo.x()*UI_SCALE,
+                                    psiGeo.y()*UI_SCALE + UI_SCALE,
+                                    psiGeo.width(), psiGeo.height());
 
-    ui->progressTimeLabel->setGeometry(35*UI_SCALE, 3*UI_SCALE, 54*UI_SCALE, 20*UI_SCALE);
+    ui->progressTimeLabel->setGeometry(35*UI_SCALE, 4*UI_SCALE,
+                                       54*UI_SCALE, 20*UI_SCALE);
     QFont ptlFont = ui->progressTimeLabel->font();
     ptlFont.setWordSpacing(-2);
     ui->progressTimeLabel->setFont(ptlFont);
     ui->progressTimeLabel->ensurePolished();
 
     QRect scGeo = ui->spectrumContainer->geometry();
-    ui->spectrumContainer->setGeometry(scGeo.x()*UI_SCALE, scGeo.y()*UI_SCALE, scGeo.width()*UI_SCALE, scGeo.height()*UI_SCALE);
+    ui->spectrumContainer->setGeometry(scGeo.x()*UI_SCALE,
+                                        scGeo.y()*UI_SCALE + UI_SCALE,
+                                        scGeo.width()*UI_SCALE, scGeo.height()*UI_SCALE);
 
     ui->inputLabel->hide();
-    ui->kbpsLabel->hide();
     ui->kHzLabel->hide();
 }
 
@@ -262,16 +343,14 @@ void PlayerView::setDeferredSeekEnabled(bool enabled)
 void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
 {
     m_playbackState = state;
+    updatePositionSliderStyle();
+    setChannelIndicators(m_monoPlayback, state != MediaPlayer::StoppedState);
     QString imageSrc;
     switch(state) {
     case MediaPlayer::StoppedState:
         if(spectrum) spectrum->stop();
         imageSrc = ":/assets/status_stopped.png";
         ui->progressTimeLabel->setText("");
-        ui->kbpsValueLabel->setText("");
-        ui->khzValueLabel->setText("");
-        ui->monoLabel->setText("");
-        ui->stereoLabel->setText("");
         break;
     case MediaPlayer::PlayingState:
         if(spectrum) spectrum->play();
@@ -283,6 +362,18 @@ void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
         break;
     }
 
+    // The playback backend can change the global audio value when it becomes
+    // active. Keep the built-in Classic volume and balance grooves painted
+    // from their skin styles as Winamp does; their value only moves the knobs.
+    if (!WinampSkin::instance().isLoaded()) {
+        ui->volumeSlider->setStyleSheet(
+            WinampSkin::instance().applyToStylesheet(getStylesheet("playerview.volumeSlider")));
+        ui->balanceSlider->setStyleSheet(
+            WinampSkin::instance().applyToStylesheet(getStylesheet("playerview.balanceSlider")));
+        ui->volumeSlider->repaint();
+        ui->balanceSlider->repaint();
+    }
+
     // Set play status icon
     QPixmap image;
     image.load(imageSrc);
@@ -290,6 +381,19 @@ void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
     scene->addPixmap(image);
     scene->setSceneRect(image.rect());
     ui->playStatusIcon->setScene(scene);
+}
+
+void PlayerView::updatePositionSliderStyle()
+{
+    QString stylesheet = getStylesheet(QStringLiteral("playerview.posBar"));
+    if (m_playbackState == MediaPlayer::StoppedState) {
+        stylesheet += QStringLiteral(
+            "\nQSlider::handle:horizontal {"
+            " width: 0px; height: 0px; border: 0;"
+            " border-image: none; background: transparent;"
+            " margin: 0px; }\n");
+    }
+    ui->posBar->setStyleSheet(stylesheet);
 }
 
 void PlayerView::setPosition(qint64 progress)
@@ -322,6 +426,7 @@ void PlayerView::setMetadata(QMediaMetaData metadata)
 {
     // Generate track info string
     const QString title = metadata.value(QMediaMetaData::Title).toString();
+    emit currentTrackTitleChanged(title.trimmed());
 
     //  Calculate duration
     qint64 ms = metadata.value(QMediaMetaData::Duration).toLongLong();
@@ -356,17 +461,31 @@ void PlayerView::setMetadata(QMediaMetaData metadata)
     int khz = metadata.value(QMediaMetaData::Comment).toString().toInt()/1000;
     ui->khzValueLabel->setText(khz > 0 ? QString::number(khz) : "");
 
-    // Set stereo indicator
-    ui->stereoLabel->setStyleSheet(QStringLiteral("color: #00e200; font-family: 'Bitstream Vera Sans Mono'; font-size: 5pt; font-weight: bold;"));
-    ui->stereoLabel->setText(QStringLiteral("stereo"));
-    ui->monoLabel->setText("");
+}
+
+void PlayerView::setChannelIndicators(bool mono, bool active)
+{
+    m_monoPlayback = mono;
+    const QImage sheet = WinampSkin::instance().sheet(QStringLiteral("monoster"));
+    if (sheet.isNull() || sheet.width() < 56 || sheet.height() < 24) {
+        m_monoIndicator->setText(mono ? QStringLiteral("mono") : QString());
+        m_stereoIndicator->setText(mono ? QString() : QStringLiteral("stereo"));
+        return;
+    }
+
+    const QRect monoRect(29, mono && active ? 0 : 12, 27, 12);
+    const QRect stereoRect(0, !mono && active ? 0 : 12, 29, 12);
+    m_monoIndicator->setPixmap(QPixmap::fromImage(sheet.copy(monoRect)));
+    m_stereoIndicator->setPixmap(QPixmap::fromImage(sheet.copy(stereoRect)));
 }
 
 void PlayerView::setDuration(qint64 duration)
 {
     m_duration = duration / 1000;
     ui->posBar->setMaximum(duration);
-    ui->posBar->setVisible(duration > 0);
+    ui->posBar->setVisible(true);
+    ui->volumeSlider->repaint();
+    ui->balanceSlider->repaint();
 }
 
 void PlayerView::setVolume(int volume)
@@ -432,15 +551,65 @@ void PlayerView::clearMessage()
 
 void PlayerView::updateDurationInfo(qint64 currentInfo)
 {
+    m_currentPositionSeconds = std::max<qint64>(0, currentInfo);
     if (m_playbackState == MediaPlayer::StoppedState) {
         ui->progressTimeLabel->setText("");
         return;
     }
-    const qint64 seconds = std::max<qint64>(0, currentInfo);
+    const qint64 seconds = m_timeLeftMode
+        ? std::max<qint64>(0, m_duration - m_currentPositionSeconds)
+        : m_currentPositionSeconds;
     const QString minutes = QString::number(seconds / 60).rightJustified(2, QLatin1Char('0'));
     const QString remainder = QString::number(seconds % 60).rightJustified(2, QLatin1Char('0'));
-    const QString tDisplayStr = minutes + QLatin1Char(':') + remainder;
+    const QString tDisplayStr = (m_timeLeftMode ? QStringLiteral("-") : QString())
+                              + minutes + QLatin1Char(':') + remainder;
     ui->progressTimeLabel->setText(tDisplayStr);
+}
+
+bool PlayerView::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == ui->posBar && event->type() == QEvent::MouseButtonPress) {
+        const auto *mouseEvent = static_cast<QMouseEvent *>(event);
+        QSlider *slider = ui->posBar;
+        if (mouseEvent->button() == Qt::LeftButton && slider->maximum() > slider->minimum()) {
+            QStyleOptionSlider option;
+            option.initFrom(slider);
+            option.orientation = slider->orientation();
+            option.minimum = slider->minimum();
+            option.maximum = slider->maximum();
+            option.sliderPosition = slider->sliderPosition();
+            option.sliderValue = slider->value();
+            option.singleStep = slider->singleStep();
+            option.pageStep = slider->pageStep();
+            option.upsideDown = slider->invertedAppearance();
+            const QRect handle = slider->style()->subControlRect(
+                QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, slider);
+            if (!handle.contains(mouseEvent->pos())) {
+                const int span = std::max(1, slider->width() - handle.width());
+                const int position = std::clamp(
+                    mouseEvent->pos().x() - handle.width() / 2, 0, span);
+                const int value = QStyle::sliderValueFromPosition(
+                    slider->minimum(), slider->maximum(), position, span,
+                    option.upsideDown);
+                slider->setValue(value);
+                if (m_deferredSeekEnabled)
+                    updateDurationInfo(value / 1000);
+                emit positionChanged(value);
+                return true;
+            }
+        }
+    }
+
+    if (watched == ui->progressTimeLabel && event->type() == QEvent::MouseButtonRelease) {
+        const auto *mouseEvent = static_cast<QMouseEvent *>(event);
+        if (mouseEvent->button() == Qt::LeftButton) {
+            m_timeLeftMode = !m_timeLeftMode;
+            QSettings().setValue(QStringLiteral("player/timeLeftMode"), m_timeLeftMode);
+            updateDurationInfo(m_currentPositionSeconds);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void PlayerView::setTrackInfo(const QString &info)

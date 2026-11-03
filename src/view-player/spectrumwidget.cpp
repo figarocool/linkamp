@@ -97,6 +97,9 @@ QLinearGradient* getSpecBarGradient()
 SpectrumWidget::SpectrumWidget(QWidget *parent)
     : QWidget{parent}
 {
+    // The Classic bitmap already paints the complete LCD micro-grid behind
+    // the visualization. Keep this overlay transparent so it only adds bars.
+    setAttribute(Qt::WA_TranslucentBackground);
     clear();
     computeLogXscale(m_xscale, N_BANDS);
     m_renderTimer = new QTimer(this);
@@ -122,33 +125,6 @@ void SpectrumWidget::stop()
     if(m_renderTimer) m_renderTimer->stop();
     clear();
     this->update();
-}
-
-const unsigned int BG_DOT_SIZE = 1 * UI_SCALE;
-const unsigned int BG_DOT_SPACING = 1 * UI_SCALE;
-
-void SpectrumWidget::paintBackground(QPainter & p)
-{
-    // Paint the gray pixels behind the spectrum
-    // Pixels: 1px*3 x 1px*3
-    // Spacing: 1px*3 for both x and y
-    const unsigned int rows = 8;
-    const unsigned int cols = 38;
-
-    // Starting points
-    unsigned int x = BG_DOT_SIZE;
-    unsigned int y = BG_DOT_SIZE + BG_DOT_SPACING;
-
-    const QColor color = QColor::fromRgb(64, 64, 64);
-
-    for(unsigned int row = 0; row < rows; row++) {
-        for(unsigned int col = 0; col < cols; col++) {
-            p.fillRect(x, y, BG_DOT_SIZE, BG_DOT_SIZE, color);
-            x += BG_DOT_SIZE + BG_DOT_SPACING; // Add pixel width + spacing
-        }
-        x = BG_DOT_SIZE;  // Go back to the start of the row
-        y += BG_DOT_SIZE + BG_DOT_SPACING; // Add pixel height + spacing
-    }
 }
 
 const unsigned int BAR_W = 3 * UI_SCALE;
@@ -179,8 +155,6 @@ void SpectrumWidget::paintPeaks (QPainter & p)
 void SpectrumWidget::paintEvent (QPaintEvent *)
 {
     QPainter p(this);
-
-    paintBackground(p);
 
     if(m_playing) {
         float mono[N];

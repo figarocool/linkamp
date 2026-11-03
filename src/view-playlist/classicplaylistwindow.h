@@ -6,7 +6,9 @@
 #include <QSet>
 
 class QMouseEvent;
+class QMoveEvent;
 class QPaintEvent;
+class QResizeEvent;
 class QKeyEvent;
 class QWheelEvent;
 
@@ -30,6 +32,8 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void moveEvent(QMoveEvent *event) override;
     void changeEvent(QEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
@@ -45,10 +49,12 @@ private:
     QPoint m_resizeStartGlobal;
     QSize m_resizeStartSize;
     int m_firstVisibleRow = 0;
+    int m_scrollbarDragOffset = 0;
     int m_unshadedHeight = 116;
     qint64 m_position = 0;
     bool m_windowShaded = false;
     bool m_dragging = false;
+    bool m_draggingScrollbar = false;
     bool m_resizing = false;
 
     int rowAt(const QPoint &position) const;

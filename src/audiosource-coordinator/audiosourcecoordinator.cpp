@@ -9,13 +9,13 @@ AudioSourceCoordinator::AudioSourceCoordinator(QObject *parent, PlayerView *play
     system_audio = new SystemAudioControl(this);
     view = playerView;
 
-    view->setVolume(system_audio->getVolume());
     connect(system_audio, &SystemAudioControl::volumeChanged, view, &PlayerView::setVolume);
     connect(view, &PlayerView::volumeChanged, this, &AudioSourceCoordinator::setVolume);
     connect(view, &PlayerView::volumeDragStarted, this, &AudioSourceCoordinator::onVolumeDragStarted);
     connect(view, &PlayerView::volumeDragFinished, this, &AudioSourceCoordinator::onVolumeDragFinished);
 
     view->setBalance(system_audio->getBalance());
+    view->setVolume(system_audio->getVolume());
     connect(system_audio, &SystemAudioControl::balanceChanged, view, &PlayerView::setBalance);
     connect(view, &PlayerView::balanceChanged, this, &AudioSourceCoordinator::setBalance);
     connect(view, &PlayerView::balanceDragStarted, this, &AudioSourceCoordinator::onBalanceDragStarted);
@@ -62,6 +62,9 @@ void AudioSourceCoordinator::setSource(int newSource)
     }
 
     currentSource = newSource;
+#ifndef LINKAMP_HAS_LINUX_INTEGRATIONS
+    sources[currentSource]->setOutputVolume(system_audio->getVolume());
+#endif
     view->setDeferredSeekEnabled(sourceLabels[currentSource] == "CD"
                                  || sourceLabels[currentSource] == "FILE");
 
@@ -97,6 +100,10 @@ void AudioSourceCoordinator::setSource(int newSource)
 void AudioSourceCoordinator::setVolume(int volume)
 {
     system_audio->setVolume(volume);
+#ifndef LINKAMP_HAS_LINUX_INTEGRATIONS
+    if (currentSource >= 0)
+        sources[currentSource]->setOutputVolume(volume);
+#endif
     showVolumeMessage(volume, m_volumeDragging);
 }
 
@@ -116,6 +123,10 @@ void AudioSourceCoordinator::onVolumeDragFinished(int volume)
 {
     m_volumeDragging = false;
     system_audio->setVolume(volume);
+#ifndef LINKAMP_HAS_LINUX_INTEGRATIONS
+    if (currentSource >= 0)
+        sources[currentSource]->setOutputVolume(volume);
+#endif
     showVolumeMessage(volume, false);
 }
 

@@ -5,6 +5,7 @@
 
 #include "mainwindow.h"
 #include "scale.h"
+#include "updatemanager.h"
 
 #include <QApplication>
 #include <QCommandLineOption>
@@ -22,10 +23,18 @@
 #include <QUrlQuery>
 #include <QStandardPaths>
 #include <QSettings>
+#include <QIcon>
+#include <string>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 #include "util.h"
 
-#define APP_VERSION_STR "1.6.3"
+#ifndef LINKAMP_VERSION
+#define LINKAMP_VERSION "0.0.0"
+#endif
 
 static QString appServerName()
 {
@@ -36,6 +45,42 @@ static QString appServerName()
         QStringLiteral("linkamp-youtube-%1.sock")
             .arg(qEnvironmentVariable("USER", QStringLiteral("user"))));
 }
+
+#ifdef Q_OS_WIN
+static void registerLinkampUrlProtocol()
+{
+    wchar_t executablePath[MAX_PATH] = {};
+    const DWORD length = GetModuleFileNameW(nullptr, executablePath, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH)
+        return;
+
+    const QString command = QStringLiteral("\"%1\" \"%2\"")
+        .arg(QString::fromWCharArray(executablePath), QStringLiteral("%1"));
+    HKEY protocolKey = nullptr;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Classes\\linkamp", 0, nullptr,
+                        REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, nullptr, &protocolKey, nullptr) != ERROR_SUCCESS)
+        return;
+
+    const wchar_t protocolDescription[] = L"URL:Linkamp Protocol";
+    RegSetValueExW(protocolKey, nullptr, 0, REG_SZ,
+                   reinterpret_cast<const BYTE *>(protocolDescription), sizeof(protocolDescription));
+    const wchar_t urlProtocol[] = L"";
+    RegSetValueExW(protocolKey, L"URL Protocol", 0, REG_SZ,
+                   reinterpret_cast<const BYTE *>(urlProtocol), sizeof(urlProtocol));
+    RegCloseKey(protocolKey);
+
+    HKEY commandKey = nullptr;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER,
+                        L"Software\\Classes\\linkamp\\shell\\open\\command", 0, nullptr,
+                        REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, nullptr, &commandKey, nullptr) != ERROR_SUCCESS)
+        return;
+    const std::wstring commandWide = command.toStdWString();
+    RegSetValueExW(commandKey, nullptr, 0, REG_SZ,
+                   reinterpret_cast<const BYTE *>(commandWide.c_str()),
+                   static_cast<DWORD>((commandWide.size() + 1) * sizeof(wchar_t)));
+    RegCloseKey(commandKey);
+}
+#endif
 
 static QString youtubeUrlArgument(const QString &argument)
 {
@@ -71,11 +116,16 @@ static bool sendUrlsToRunningInstance(const QString &serverName, const QStringLi
 
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_WIN
+    registerLinkampUrlProtocol();
+#endif
     QApplication app(argc, argv);
+    const QIcon linkampIcon(QStringLiteral(":/assets/linkamp-mark.png"));
+    app.setWindowIcon(linkampIcon);
 
     QCoreApplication::setApplicationName("Linkamp");
     QCoreApplication::setOrganizationName("Linkamp");
-    QCoreApplication::setApplicationVersion(APP_VERSION_STR);
+    QCoreApplication::setApplicationVersion(QStringLiteral(LINKAMP_VERSION));
     QSettings oldSettings(QStringLiteral("Rod"), QStringLiteral("Linamp"));
     QSettings linkampSettings;
     if (linkampSettings.allKeys().isEmpty() && !oldSettings.allKeys().isEmpty()) {
@@ -121,6 +171,8 @@ int main(int argc, char *argv[])
     qInfo() << "Linkamp URL bridge listening at" << server.fullServerName();
 
     MainWindow window;
+    auto *updateManager = new UpdateManager(&app);
+    QTimer::singleShot(45000, updateManager, &UpdateManager::checkForUpdates);
     QHash<QLocalSocket *, QByteArray> pendingMessages;
     QObject::connect(&server, &QLocalServer::newConnection, &app, [&]() {
         while (server.hasPendingConnections()) {

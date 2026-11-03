@@ -62,6 +62,9 @@
      </property>
      <item>
       <layout class="QHBoxLayout" name="topStatusContainer">
+       <property name="leftMargin">
+        <number>7</number>
+       </property>
        <property name="spacing">
         <number>0</number>
        </property>
@@ -74,7 +77,7 @@
           <number>0</number>
          </property>
          <property name="topMargin">
-          <number>0</number>
+          <number>8</number>
          </property>
          <property name="rightMargin">
           <number>2</number>
@@ -586,7 +589,7 @@
            <property name="sizeHint" stdset="0">
             <size>
              <width>20</width>
-             <height>7</height>
+             <height>0</height>
             </size>
            </property>
           </spacer>
@@ -599,10 +602,10 @@
           <number>0</number>
          </property>
          <property name="leftMargin">
-          <number>2</number>
+          <number>1</number>
          </property>
          <property name="topMargin">
-          <number>1</number>
+          <number>8</number>
          </property>
          <property name="rightMargin">
           <number>0</number>
@@ -1509,7 +1512,7 @@ QCheckBox::indicator:indeterminate:pressed {
            <property name="sizeHint" stdset="0">
             <size>
              <width>20</width>
-             <height>7</height>
+             <height>0</height>
             </size>
            </property>
           </spacer>

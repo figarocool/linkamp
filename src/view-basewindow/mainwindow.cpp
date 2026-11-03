@@ -12,6 +12,8 @@
 #include "ui_desktopplayerwindow.h"
 #include "scale.h"
 #include "util.h"
+#include "winampskin.h"
+#include "updatemanager.h"
 
 #ifdef IS_EMBEDDED
 #include "embeddedbasewindow.h"
@@ -34,6 +36,9 @@
 #include <QCursor>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QSettings>
+#include <QSystemTrayIcon>
+#include <QIcon>
 
 #include <algorithm>
 
@@ -45,19 +50,38 @@ const unsigned int WINDOW_W = 275 * UI_SCALE;
 const unsigned int WINDOW_H = 116 * UI_SCALE;
 #endif
 
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
 #define PY_SSIZE_T_CLEAN
 #undef slots
 #include <Python.h>
 #define slots Q_SLOTS
-
 #define LINKAMP_PY_MODULE "linamp"
+#endif
+
+namespace {
+int windowBottomOnScreen(const QWidget *window)
+{
+    return window->pos().y() + window->height();
+}
+}
 
 MainWindow::MainWindow(QWidget *parent)
      : QMainWindow{parent}
 {
-    // Initialize Python interpreter, required by BT and Spotify sources
+    const QString savedSkin = QSettings().value(QStringLiteral("skin/classicWsz")).toString();
+    if (!savedSkin.isEmpty()) {
+        QString skinError;
+        if (!WinampSkin::instance().load(savedSkin, &skinError)) {
+            QSettings().remove(QStringLiteral("skin/classicWsz"));
+            qWarning() << "Unable to restore Winamp skin:" << skinError;
+        }
+    }
+
+    // Linux BT and Spotify integrations are provided by the embedded Python bridge.
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     Py_Initialize();
     PyEval_SaveThread();
+#endif
 
     // Setup playlist
     m_playlistModel = new PlaylistModel(this);
@@ -65,6 +89,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_playlist, &QMediaPlaylist::mediaInserted, this, &MainWindow::schedulePlaylistSave);
     connect(m_playlist, &QMediaPlaylist::mediaRemoved, this, &MainWindow::schedulePlaylistSave);
     connect(m_playlist, &QMediaPlaylist::mediaChanged, this, &MainWindow::schedulePlaylistSave);
+    connect(m_playlist, &QMediaPlaylist::currentIndexChanged, this, [](int index) {
+        QSettings().setValue(QStringLiteral("playlist/currentIndex"), index);
+    });
     connect(qApp, &QCoreApplication::aboutToQuit, this, &MainWindow::saveSavedPlaylist);
     loadSavedPlaylist();
 
@@ -81,13 +108,28 @@ MainWindow::MainWindow(QWidget *parent)
     coordinator = new AudioSourceCoordinator(this, player);
     coordinator->setEqualizer(equalizer);
     fileSource = new AudioSourceFile(this, m_playlistModel);
+    const auto restoreSelectedTrack = [this] {
+        if (!m_playlist || m_playlist->mediaCount() <= 0)
+            return;
+        const int savedIndex = QSettings().value(QStringLiteral("playlist/currentIndex"), 0).toInt();
+        const int index = savedIndex >= 0 && savedIndex < m_playlist->mediaCount()
+            ? savedIndex : 0;
+        if (m_playlist->currentIndex() != index)
+            m_playlist->setCurrentIndex(index);
+    };
+    connect(m_playlist, &QMediaPlaylist::loaded, this, restoreSelectedTrack);
+    restoreSelectedTrack();
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     btSource = new AudioSourcePython(LINKAMP_PY_MODULE, "BTPlayer", this);
     cdSource = new AudioSourceCDNative(this);
     spotSource = new AudioSourcePython(LINKAMP_PY_MODULE, "SpotifyPlayer", this);
+#endif
     coordinator->addSource(fileSource, "FILE", true);
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     coordinator->addSource(btSource, "BT", false);
     coordinator->addSource(cdSource, "CD", false);
     coordinator->addSource(spotSource, "SPOT", false);
+#endif
 
 
     // Connect events
@@ -104,13 +146,26 @@ MainWindow::MainWindow(QWidget *parent)
     playerWindow->setAttribute(Qt::WidgetAttribute::WA_StyledBackground,  true);
     m_playerBodyContainer = playerWindow->ui->bodyContainer;
     if (auto *mainTitleBar = playerWindow->findChild<TitleBar *>(QStringLiteral("titlebarContainer"))) {
+        m_mainPlayerWindow = mainTitleBar->window();
+        m_mainPlayerWindow->setWindowTitle(QStringLiteral("Linkamp"));
+        connect(player, &PlayerView::currentTrackTitleChanged, m_mainPlayerWindow,
+                [window = m_mainPlayerWindow](const QString &title) {
+            const QString trackTitle = title.trimmed();
+            window->setWindowTitle(trackTitle.isEmpty()
+                ? QStringLiteral("Linkamp")
+                : QStringLiteral("%1 - Linkamp").arg(trackTitle));
+        });
+        m_mainPlayerWindow->installEventFilter(this);
+        const QString mainPositionKey = QStringLiteral("windows/main/position");
+        if (QSettings().contains(mainPositionKey))
+            m_mainPlayerWindow->move(QSettings().value(mainPositionKey).toPoint());
         connect(mainTitleBar, &TitleBar::menuClicked, this, &MainWindow::showMenu);
         connect(mainTitleBar, &TitleBar::shadeClicked, this, &MainWindow::toggleWindowShade);
         connect(mainTitleBar, &TitleBar::moveStarted, this, [this](bool detach) {
-            beginAttachedWindowDrag(this, detach);
+            beginAttachedWindowDrag(m_mainPlayerWindow, detach);
         });
         connect(mainTitleBar, &TitleBar::moveFinished, this, [this] {
-            finishAttachedWindowDrag(this);
+            finishAttachedWindowDrag(m_mainPlayerWindow);
         });
     }
 
@@ -131,6 +186,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Keep the classic playlist editor as a separate compact top-level window.
     playlist = new ClassicPlaylistWindow(m_playlist, this);
+    if (playlist->property("savedWindowPosition").toBool()) {
+        m_lastPlaylistPosition = playlist->pos();
+        m_havePlaylistPosition = true;
+        m_playlistAttached = false;
+    }
     playlist->installEventFilter(this);
     connect(player, &PlayerView::playbackPositionChanged, playlist, &ClassicPlaylistWindow::setPosition);
     connect(playlist, &ClassicPlaylistWindow::openFilesRequested, this, &MainWindow::open);
@@ -155,6 +215,13 @@ MainWindow::MainWindow(QWidget *parent)
     m_equalizerWindow->installEventFilter(this);
     m_equalizerWindow->setWindowTitle(tr("Linkamp Equalizer"));
     m_equalizerWindow->setFixedSize(275, 116);
+    const QString equalizerPositionKey = QStringLiteral("windows/equalizer/position");
+    if (QSettings().contains(equalizerPositionKey)) {
+        m_equalizerWindow->move(QSettings().value(equalizerPositionKey).toPoint());
+        m_lastEqualizerPosition = m_equalizerWindow->pos();
+        m_haveEqualizerPosition = true;
+        m_equalizerAttached = false;
+    }
     m_equalizerWindow->setStyleSheet("QDialog { background: transparent; border: 0px; }");
     auto *equalizerWindowLayout = new QVBoxLayout(m_equalizerWindow);
     equalizerWindowLayout->setContentsMargins(0, 0, 0, 0);
@@ -199,17 +266,40 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowFlags(Qt::CustomizeWindowHint);
     #endif
 
+    m_trayIcon = new QSystemTrayIcon(QIcon(QStringLiteral(":/assets/linkamp-mark.png")), this);
+    m_trayIcon->setToolTip(QStringLiteral("Linkamp"));
+    auto *trayMenu = new QMenu(this);
+    QAction *openLinkamp = trayMenu->addAction(tr("Apri Linkamp"));
+    connect(openLinkamp, &QAction::triggered, this, &MainWindow::showPlayer);
+    trayMenu->addSeparator();
+    QAction *exitLinkamp = trayMenu->addAction(tr("Esci"));
+    connect(exitLinkamp, &QAction::triggered, qApp, &QCoreApplication::quit);
+    m_trayIcon->setContextMenu(trayMenu);
+    connect(m_trayIcon, &QSystemTrayIcon::activated, this,
+            [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
+            showPlayer();
+    });
+    if (QSystemTrayIcon::isSystemTrayAvailable())
+        m_trayIcon->show();
+
+    auto *updateManager = new UpdateManager(this);
+    QTimer::singleShot(45000, updateManager, &UpdateManager::checkForUpdates);
+
     QTimer::singleShot(50, this, [this] {
         if (playlist && !playlist->isVisible())
             showPlaylist();
     });
+    WinampSkin::instance().refreshWidgetStyles();
 }
 
 MainWindow::~MainWindow()
 {
     saveSavedPlaylist();
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     PyGILState_Ensure();
     Py_Finalize();
+#endif
 }
 
 QString MainWindow::defaultPlaylistPath()
@@ -284,17 +374,18 @@ void MainWindow::showPlaylist()
     if (!m_havePlaylistPosition) {
         playlist->resize(275, 116);
         m_syncingAttachedWindows = true;
-        playlist->move(frameGeometry().left(), frameGeometry().bottom() + 1);
+        playlist->move(m_mainPlayerWindow->frameGeometry().left(),
+                       windowBottomOnScreen(m_mainPlayerWindow));
         m_lastPlaylistPosition = playlist->pos();
         m_havePlaylistPosition = true;
         m_syncingAttachedWindows = false;
         m_playlistAttached = true;
     } else if (m_playlistAttached) {
         const int y = m_equalizerWindow && m_equalizerWindow->isVisible()
-            ? m_equalizerWindow->frameGeometry().bottom() + 1
-            : frameGeometry().bottom() + 1;
+            ? windowBottomOnScreen(m_equalizerWindow)
+            : windowBottomOnScreen(m_mainPlayerWindow);
         m_syncingAttachedWindows = true;
-        playlist->move(frameGeometry().left(), y);
+        playlist->move(m_mainPlayerWindow->frameGeometry().left(), y);
         m_lastPlaylistPosition = playlist->pos();
         m_syncingAttachedWindows = false;
     }
@@ -312,10 +403,16 @@ void MainWindow::showMenu()
     QAction *playlistAction = menu.addAction(tr("Playlist editor"));
     QAction *equalizerAction = menu.addAction(tr("Equalizer"));
     menu.addSeparator();
+    QAction *loadSkinAction = menu.addAction(tr("Load Winamp classic skin…"));
+    QAction *loadSkinFolderAction = menu.addAction(tr("Load extracted skin folder…"));
+    QAction *defaultSkinAction = menu.addAction(tr("Use Linkamp default skin"));
+    menu.addSeparator();
     QAction *fileSourceAction = menu.addAction(tr("File source"));
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     QAction *cdSourceAction = menu.addAction(tr("CD source"));
     QAction *bluetoothSourceAction = menu.addAction(tr("Bluetooth source"));
     QAction *spotifySourceAction = menu.addAction(tr("Spotify source"));
+#endif
 
     QAction *selected = menu.exec(QCursor::pos());
     if (selected == openFiles)
@@ -326,14 +423,36 @@ void MainWindow::showMenu()
         showPlaylist();
     else if (selected == equalizerAction)
         showEqualizer();
+    else if (selected == loadSkinAction) {
+        const QString path = QFileDialog::getOpenFileName(
+            this, tr("Load Winamp classic skin"), QString(),
+            tr("Winamp classic skins (*.wsz *.zip);;All files (*)"));
+        if (!path.isEmpty()) {
+            QString skinError;
+            if (!WinampSkin::instance().load(path, &skinError))
+                QMessageBox::warning(this, tr("Skin non caricata"), skinError);
+        }
+    } else if (selected == loadSkinFolderAction) {
+        const QString path = QFileDialog::getExistingDirectory(
+            this, tr("Load extracted Winamp skin folder"), QDir::homePath());
+        if (!path.isEmpty()) {
+            QString skinError;
+            if (!WinampSkin::instance().load(path, &skinError))
+                QMessageBox::warning(this, tr("Skin non caricata"), skinError);
+        }
+    } else if (selected == defaultSkinAction) {
+        WinampSkin::instance().reset();
+    }
     else if (selected == fileSourceAction)
         coordinator->setSource(0);
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     else if (selected == bluetoothSourceAction)
         coordinator->setSource(1);
     else if (selected == cdSourceAction)
         coordinator->setSource(2);
     else if (selected == spotifySourceAction)
         coordinator->setSource(3);
+#endif
 }
 
 void MainWindow::showEqualizer()
@@ -344,7 +463,8 @@ void MainWindow::showEqualizer()
         m_equalizerWindow->hide();
         if (playlist && playlist->isVisible() && m_playlistAttached && m_equalizerAttached) {
             m_syncingAttachedWindows = true;
-            playlist->move(frameGeometry().left(), frameGeometry().bottom() + 1);
+            playlist->move(m_mainPlayerWindow->frameGeometry().left(),
+                           windowBottomOnScreen(m_mainPlayerWindow));
             m_lastPlaylistPosition = playlist->pos();
             m_syncingAttachedWindows = false;
         }
@@ -352,17 +472,20 @@ void MainWindow::showEqualizer()
     }
     if (!m_haveEqualizerPosition) {
         m_syncingAttachedWindows = true;
-        m_equalizerWindow->move(frameGeometry().left(), frameGeometry().bottom() + 1);
+        m_equalizerWindow->move(m_mainPlayerWindow->frameGeometry().left(),
+                                windowBottomOnScreen(m_mainPlayerWindow));
         m_lastEqualizerPosition = m_equalizerWindow->pos();
         m_haveEqualizerPosition = true;
         m_syncingAttachedWindows = false;
         m_equalizerAttached = true;
     } else if (m_equalizerAttached) {
         m_syncingAttachedWindows = true;
-        m_equalizerWindow->move(frameGeometry().left(), frameGeometry().bottom() + 1);
+        m_equalizerWindow->move(m_mainPlayerWindow->frameGeometry().left(),
+                                windowBottomOnScreen(m_mainPlayerWindow));
         m_lastEqualizerPosition = m_equalizerWindow->pos();
         if (playlist && playlist->isVisible() && m_playlistAttached) {
-            playlist->move(frameGeometry().left(), m_equalizerWindow->frameGeometry().bottom() + 1);
+            playlist->move(m_mainPlayerWindow->frameGeometry().left(),
+                           windowBottomOnScreen(m_equalizerWindow));
             m_lastPlaylistPosition = playlist->pos();
         }
         m_syncingAttachedWindows = false;
@@ -375,21 +498,22 @@ void MainWindow::showEqualizer()
 void MainWindow::showEvent(QShowEvent *event)
 {
     QMainWindow::showEvent(event);
-    m_lastMainPosition = pos();
+    m_lastMainPosition = m_mainPlayerWindow ? m_mainPlayerWindow->pos() : pos();
     m_haveMainPosition = true;
     if (m_equalizerWindow != nullptr && !m_haveEqualizerPosition) {
         m_syncingAttachedWindows = true;
-        m_equalizerWindow->move(frameGeometry().left(), frameGeometry().bottom() + 1);
+        m_equalizerWindow->move(m_mainPlayerWindow->frameGeometry().left(),
+                                windowBottomOnScreen(m_mainPlayerWindow));
         m_lastEqualizerPosition = m_equalizerWindow->pos();
         m_haveEqualizerPosition = true;
         m_syncingAttachedWindows = false;
     }
     if (playlist != nullptr && !m_havePlaylistPosition) {
         const int y = (m_equalizerWindow != nullptr && m_equalizerWindow->isVisible())
-            ? m_equalizerWindow->frameGeometry().bottom() + 1
-            : frameGeometry().bottom() + 1;
+            ? windowBottomOnScreen(m_equalizerWindow)
+            : windowBottomOnScreen(m_mainPlayerWindow);
         m_syncingAttachedWindows = true;
-        playlist->move(frameGeometry().left(), y);
+        playlist->move(m_mainPlayerWindow->frameGeometry().left(), y);
         m_lastPlaylistPosition = playlist->pos();
         m_havePlaylistPosition = true;
         m_syncingAttachedWindows = false;
@@ -424,10 +548,20 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     QWidget *window = qobject_cast<QWidget *>(watched);
     if (window != nullptr && event->type() == QEvent::Move
-        && (window == playlist || window == m_equalizerWindow)) {
-        QPoint *lastPosition = window == playlist ? &m_lastPlaylistPosition : &m_lastEqualizerPosition;
-        bool *hasPosition = window == playlist ? &m_havePlaylistPosition : &m_haveEqualizerPosition;
+        && (window == m_mainPlayerWindow || window == playlist || window == m_equalizerWindow)) {
+        QPoint *lastPosition = window == m_mainPlayerWindow ? &m_lastMainPosition
+            : window == playlist ? &m_lastPlaylistPosition : &m_lastEqualizerPosition;
+        bool *hasPosition = window == m_mainPlayerWindow ? &m_haveMainPosition
+            : window == playlist ? &m_havePlaylistPosition : &m_haveEqualizerPosition;
         const QPoint current = window->pos();
+        if (window->isVisible()) {
+            const QString key = window == m_mainPlayerWindow
+                ? QStringLiteral("windows/main/position")
+                : window == m_equalizerWindow
+                    ? QStringLiteral("windows/equalizer/position")
+                    : QStringLiteral("windows/playlist/position");
+            QSettings().setValue(key, window->frameGeometry().topLeft());
+        }
         if (m_syncingAttachedWindows || !*hasPosition) {
             *lastPosition = current;
             *hasPosition = true;
@@ -457,7 +591,7 @@ void MainWindow::moveAttachedWindows(QWidget *source, const QPoint &delta)
         playlist->move(playlist->pos() + delta);
     if (m_equalizerWindow != nullptr && source != m_equalizerWindow && m_equalizerAttached)
         m_equalizerWindow->move(m_equalizerWindow->pos() + delta);
-    m_lastMainPosition = pos();
+    m_lastMainPosition = m_mainPlayerWindow ? m_mainPlayerWindow->pos() : pos();
     m_lastPlaylistPosition = playlist != nullptr ? playlist->pos() : QPoint();
     m_lastEqualizerPosition = m_equalizerWindow != nullptr ? m_equalizerWindow->pos() : QPoint();
     m_haveMainPosition = true;
@@ -468,7 +602,7 @@ void MainWindow::moveAttachedWindows(QWidget *source, const QPoint &delta)
 
 void MainWindow::beginAttachedWindowDrag(QWidget *window, bool detach)
 {
-    if (window == this) {
+    if (window == m_mainPlayerWindow || window == this) {
         m_mainForceDetach = detach;
         if (detach) {
             m_playlistAttached = false;
@@ -487,7 +621,7 @@ void MainWindow::beginAttachedWindowDrag(QWidget *window, bool detach)
 
 void MainWindow::finishAttachedWindowDrag(QWidget *window)
 {
-    if (window == this) {
+    if (window == m_mainPlayerWindow || window == this) {
         const bool forced = m_mainForceDetach;
         m_mainForceDetach = false;
         if (forced)
@@ -518,7 +652,8 @@ bool MainWindow::snapWindowToMain(QWidget *window)
     if (window == nullptr)
         return false;
 
-    const QRect mainRect = frameGeometry();
+    const QRect mainRect = m_mainPlayerWindow
+        ? m_mainPlayerWindow->frameGeometry() : frameGeometry();
     const QRect childRect = window->frameGeometry();
     constexpr int snapDistance = 12;
     struct SnapCandidate {

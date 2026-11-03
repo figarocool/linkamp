@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Installer>
+    <Name>Linkamp</Name>
+    <Version>@LINKAMP_VERSION@</Version>
+    <Title>Linkamp Installer</Title>
+    <Publisher>Stefano Basile</Publisher>
+    <ProductUrl>https://github.com/figarocool/linkamp</ProductUrl>
+    <StartMenuDir>Linkamp</StartMenuDir>
+    <TargetDir>@LINKAMP_TARGET_DIR@</TargetDir>
+    <MaintenanceToolName>linkamp-maintenance</MaintenanceToolName>
+    <MaintenanceToolIniFile>linkamp-maintenance.ini</MaintenanceToolIniFile>
+    <RemoteRepositories>
+        <Repository>
+            <Url>https://figarocool.github.io/linkamp/updates/@LINKAMP_PLATFORM@</Url>
+            <Enabled>1</Enabled>
+            <DisplayName>Linkamp updates</DisplayName>
+        </Repository>
+    </RemoteRepositories>
+</Installer>

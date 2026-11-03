@@ -2,13 +2,14 @@
 #define AUDIOSOURCEWSPECTRUMCAPTURE_H
 
 #include <QObject>
+#include "audiosource.h"
+
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
 #include <QTimer>
 #include <QtConcurrent>
 #include <signal.h>
 #include <spa/param/audio/format-utils.h>
 #include <pipewire/pipewire.h>
-
-#include "audiosource.h"
 
 struct PwData {
         struct pw_main_loop *loop;
@@ -21,6 +22,7 @@ struct PwData {
         QByteArray *sample;
         QDataStream *sampleStream;
 };
+#endif
 
 class AudioSourceWSpectrumCapture : public AudioSource
 {
@@ -33,6 +35,7 @@ public:
     void stopSpectrum();
 
 private:
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     bool spectrumRunning = false;
     QTimer *dataEmitTimer = nullptr;
     void emitData();
@@ -43,6 +46,7 @@ private:
     void pwLoop();
 
     QFuture<void> pwLoopThread;
+#endif
 
 signals:
 

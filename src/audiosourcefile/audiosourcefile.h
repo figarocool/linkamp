@@ -15,6 +15,7 @@ class AudioSourceFile : public AudioSourceWSpectrumCapture
     Q_OBJECT
 public:
     explicit AudioSourceFile(QObject *parent = nullptr, PlaylistModel *playlistModel = nullptr);
+    void setOutputVolume(int volume) override;
 
 signals:
     void showPlaylistRequested();

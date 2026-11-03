@@ -31,7 +31,6 @@ private:
     QTimer *m_renderTimer = nullptr;
     QAudioFormat m_format;
 
-    void paintBackground(QPainter &);
     void paintSpectrum(QPainter &);
     void paintPeaks(QPainter &);
 

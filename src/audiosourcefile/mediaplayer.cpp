@@ -239,7 +239,10 @@ bool MediaPlayer::isMissingDate(const QMediaMetaData &metaData)
 
 bool MediaPlayer::isMissingBitrate(const QMediaMetaData &metaData)
 {
-    return metaData.value(QMediaMetaData::AudioBitRate).toInt() <= 0;
+    // The FFmpeg backend can expose an MP3 frame's instantaneous rate here
+    // (for example 4 kb/s) instead of the stream bitrate. TagLib supplies the
+    // file's actual average bitrate and is already used by the fallback path.
+    return metaData.value(QMediaMetaData::AudioBitRate).toInt() < 8000;
 }
 
 bool MediaPlayer::isMissingSampleRate(const QMediaMetaData &metaData)

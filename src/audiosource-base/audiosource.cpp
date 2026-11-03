@@ -5,3 +5,8 @@ AudioSource::AudioSource(QObject *parent)
 {
 
 }
+
+void AudioSource::setOutputVolume(int volume)
+{
+    Q_UNUSED(volume);
+}

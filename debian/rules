@@ -14,4 +14,4 @@ override_dh_auto_install:
 	cp linkamp.desktop debian/linkamp/usr/share/applications/
 	
 	mkdir -p debian/linkamp/usr/share/icons/hicolor/72x72/apps/
-	cp assets/logoButton.png debian/linkamp/usr/share/icons/hicolor/72x72/apps/linkamp-player.png
+	cp assets/linkamp-icon-72.png debian/linkamp/usr/share/icons/hicolor/72x72/apps/linkamp-player.png

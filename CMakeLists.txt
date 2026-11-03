@@ -1,25 +1,47 @@
 cmake_minimum_required(VERSION 3.16)
-project(Linkamp VERSION 1.6.3 LANGUAGES C CXX)
+set(LINKAMP_PROJECT_VERSION "$ENV{LINKAMP_BUILD_VERSION}")
+if(NOT LINKAMP_PROJECT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+")
+    set(LINKAMP_PROJECT_VERSION 1.6.3)
+endif()
+project(Linkamp VERSION ${LINKAMP_PROJECT_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOMOC ON)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
+if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
+endif()
 
-find_package(QT NAMES Qt5 Qt6 REQUIRED COMPONENTS Core)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Concurrent DBus Gui Multimedia MultimediaWidgets Network Widgets)
-find_package(Python3 REQUIRED COMPONENTS Development.Embed)
-find_package(ALSA REQUIRED)
-find_package(PkgConfig REQUIRED)
+find_package(QT NAMES Qt6 REQUIRED COMPONENTS Core)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Concurrent Gui Multimedia MultimediaWidgets Network Widgets)
 
-pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
-pkg_check_modules(SPA REQUIRED IMPORTED_TARGET libspa-0.2)
-pkg_check_modules(PULSEAUDIO REQUIRED IMPORTED_TARGET libpulse libpulse-simple)
-pkg_check_modules(TAGLIB REQUIRED IMPORTED_TARGET taglib)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(_linkamp_linux_integrations_default ON)
+else()
+    set(_linkamp_linux_integrations_default OFF)
+endif()
+option(LINKAMP_ENABLE_LINUX_INTEGRATIONS "Build Linux PipeWire, CD, Bluetooth and Spotify integrations" ${_linkamp_linux_integrations_default})
 
-pkg_check_modules(CDIO_PARANOIA REQUIRED IMPORTED_TARGET libcdio_paranoia libcdio_cdda)
-pkg_check_modules(DISCID REQUIRED IMPORTED_TARGET libdiscid)
+if(LINKAMP_ENABLE_LINUX_INTEGRATIONS)
+    set(LINKAMP_HAS_LINUX_INTEGRATIONS ON)
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS DBus)
+    find_package(Python3 REQUIRED COMPONENTS Development.Embed)
+    find_package(ALSA REQUIRED)
+    find_package(PkgConfig REQUIRED)
+
+    pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
+    pkg_check_modules(SPA REQUIRED IMPORTED_TARGET libspa-0.2)
+    pkg_check_modules(PULSEAUDIO REQUIRED IMPORTED_TARGET libpulse libpulse-simple)
+    pkg_check_modules(TAGLIB REQUIRED IMPORTED_TARGET taglib)
+    pkg_check_modules(ARCHIVE REQUIRED IMPORTED_TARGET libarchive)
+    pkg_check_modules(CDIO_PARANOIA REQUIRED IMPORTED_TARGET libcdio_paranoia libcdio_cdda)
+    pkg_check_modules(DISCID REQUIRED IMPORTED_TARGET libdiscid)
+else()
+    set(LINKAMP_HAS_LINUX_INTEGRATIONS OFF)
+    find_package(TagLib CONFIG REQUIRED)
+    find_package(LibArchive REQUIRED)
+endif()
 
 qt_standard_project_setup()
 
@@ -39,23 +61,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/view-equalizer)
 qt_add_executable(player WIN32 MACOSX_BUNDLE
     src/audiosource-base/audiosource.cpp
     src/audiosource-base/audiosource.h
-    src/audiosource-base/audiosourcewspectrumcapture.cpp
     src/audiosource-base/audiosourcewspectrumcapture.h
-    src/audiosourcecdnative/audiosourcecdnative.cpp
-    src/audiosourcecdnative/audiosourcecdnative.h
-    src/audiosourcecdnative/cdnativediscservice.cpp
-    src/audiosourcecdnative/cdnativediscservice.h
-    src/audiosourcecdnative/cdnativemetadataservice.cpp
-    src/audiosourcecdnative/cdnativemetadataservice.h
-    src/audiosourcecdnative/cdnativeplaybackengine.cpp
-    src/audiosourcecdnative/cdnativeplaybackengine.h
-    src/audiosourcecdnative/cdnativetrack.h
-    src/audiosourcecdnative/cdpcmiodevice.cpp
-    src/audiosourcecdnative/cdpcmiodevice.h
-    src/audiosourcecdnative/cdpcmringbuffer.cpp
-    src/audiosourcecdnative/cdpcmringbuffer.h
-    src/audiosourcepython/audiosourcepython.cpp
-    src/audiosourcepython/audiosourcepython.h
     src/audiosource-coordinator/audiosourcecoordinator.cpp
     src/audiosource-coordinator/audiosourcecoordinator.h
     src/audiosourcefile/audiosourcefile.cpp
@@ -114,7 +120,6 @@ qt_add_executable(player WIN32 MACOSX_BUNDLE
     src/shared/scale.h
     src/shared/systemaudiocontrol.cpp
     src/shared/systemaudiocontrol.h
-    src/shared/systemequalizer.cpp
     src/shared/systemequalizer.h
     src/shared/equalizerbands.h
     src/shared/equalizerpreset.cpp
@@ -125,20 +130,70 @@ qt_add_executable(player WIN32 MACOSX_BUNDLE
     src/shared/util.h
     src/shared/linkampslider.h
     src/shared/linkampslider.cpp
+    src/shared/winampskin.cpp
+    src/shared/winampskin.h
+    src/shared/updatemanager.cpp
+    src/shared/updatemanager.h
     src/main.cpp
     uiassets.qrc
 )
 
+if(APPLE)
+    configure_file(packaging/macos/Info.plist.in
+        ${CMAKE_CURRENT_BINARY_DIR}/Linkamp-Info.plist @ONLY)
+    set_target_properties(player PROPERTIES
+        OUTPUT_NAME Linkamp
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_BINARY_DIR}/Linkamp-Info.plist
+        MACOSX_BUNDLE_GUI_IDENTIFIER com.figarocool.linkamp
+        MACOSX_BUNDLE_BUNDLE_NAME Linkamp
+        MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+    )
+endif()
+
+if(LINKAMP_HAS_LINUX_INTEGRATIONS)
+    target_sources(player PRIVATE
+        src/audiosource-base/audiosourcewspectrumcapture.cpp
+        src/audiosourcecdnative/audiosourcecdnative.cpp
+        src/audiosourcecdnative/audiosourcecdnative.h
+        src/audiosourcecdnative/cdnativediscservice.cpp
+        src/audiosourcecdnative/cdnativediscservice.h
+        src/audiosourcecdnative/cdnativemetadataservice.cpp
+        src/audiosourcecdnative/cdnativemetadataservice.h
+        src/audiosourcecdnative/cdnativeplaybackengine.cpp
+        src/audiosourcecdnative/cdnativeplaybackengine.h
+        src/audiosourcecdnative/cdnativetrack.h
+        src/audiosourcecdnative/cdpcmiodevice.cpp
+        src/audiosourcecdnative/cdpcmiodevice.h
+        src/audiosourcecdnative/cdpcmringbuffer.cpp
+        src/audiosourcecdnative/cdpcmringbuffer.h
+        src/audiosourcepython/audiosourcepython.cpp
+        src/audiosourcepython/audiosourcepython.h
+        src/shared/systemequalizer.cpp
+    )
+    target_link_libraries(player PRIVATE
+        ALSA::ALSA
+        PkgConfig::PIPEWIRE
+        PkgConfig::SPA
+        PkgConfig::PULSEAUDIO
+        PkgConfig::CDIO_PARANOIA
+        PkgConfig::DISCID
+        Python3::Python
+        Qt::DBus
+        PkgConfig::TAGLIB
+        PkgConfig::ARCHIVE
+    )
+    target_compile_definitions(player PRIVATE LINKAMP_HAS_LINUX_INTEGRATIONS=1)
+else()
+    target_sources(player PRIVATE
+        src/audiosource-base/audiosourcewspectrumcapture_stub.cpp
+        src/shared/systemequalizer_stub.cpp
+    )
+    target_link_libraries(player PRIVATE TagLib::TagLib LibArchive::LibArchive)
+endif()
+
 target_link_libraries(player PRIVATE
-    ALSA::ALSA
-    PkgConfig::PIPEWIRE
-    PkgConfig::SPA
-    PkgConfig::PULSEAUDIO
-    PkgConfig::TAGLIB
-    Python3::Python
     Qt::Concurrent
     Qt::Core
-    Qt::DBus
     Qt::Gui
     Qt::Multimedia
     Qt::MultimediaWidgets
@@ -146,8 +201,11 @@ target_link_libraries(player PRIVATE
     Qt::Widgets
 )
 
-target_link_libraries(player PRIVATE PkgConfig::CDIO_PARANOIA)
-target_link_libraries(player PRIVATE PkgConfig::DISCID)
+if(WIN32)
+    target_link_libraries(player PRIVATE advapi32)
+endif()
+
+target_compile_definitions(player PRIVATE LINKAMP_VERSION="${PROJECT_VERSION}")
 
 install(TARGETS player
     BUNDLE DESTINATION .

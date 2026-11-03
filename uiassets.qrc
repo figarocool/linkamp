@@ -130,7 +130,12 @@
         <file alias="assets/classic-pledit.png">skin/classic-private/classic-pledit.png</file>
         <file alias="assets/classic-eqmain.png">skin/classic-private/classic-eqmain.png</file>
         <file alias="assets/classic-titlebar.png">skin/classic-private/classic-titlebar.png</file>
+        <file alias="assets/classic-titlebar-atlas.png">skin/classic-private/classic-titlebar-atlas.png</file>
+        <file>assets/linkamp-mark.png</file>
         <file alias="assets/classic-menu.png">skin/classic-private/classic-menu.png</file>
         <file alias="assets/classic-text.png">skin/classic-private/classic-text.png</file>
+        <file alias="assets/classic-monoster.png">skin/classic-private/classic-monoster.png</file>
+        <file alias="assets/classic-volume.png">skin/classic-private/classic-volume.png</file>
+        <file alias="assets/classic-balance.png">skin/classic-private/classic-balance.png</file>
     </qresource>
 </RCC>

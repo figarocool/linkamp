@@ -5,10 +5,12 @@
 #include <QStackedLayout>
 #include <QProcess>
 #include <QSet>
-#include "audiosourcecdnative.h"
 #include "audiosourcecoordinator.h"
 #include "audiosourcefile.h"
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
+#include "audiosourcecdnative.h"
 #include "audiosourcepython.h"
+#endif
 #include "controlbuttonswidget.h"
 #include "equalizerview.h"
 #include "playerview.h"
@@ -22,6 +24,7 @@ class QMoveEvent;
 class QShowEvent;
 class QCloseEvent;
 class QTimer;
+class QSystemTrayIcon;
 
 class MainWindow : public QMainWindow
 {
@@ -39,9 +42,11 @@ public:
     SystemEqualizer *equalizer;
     AudioSourceCoordinator *coordinator;
     AudioSourceFile *fileSource;
+#ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     AudioSourcePython *btSource;
     AudioSourceCDNative *cdSource;
     AudioSourcePython *spotSource;
+#endif
 
 public slots:
     void showPlayer();
@@ -75,6 +80,8 @@ private:
     PlaylistModel *m_playlistModel = nullptr;
     QSet<QString> m_pendingYouTubeIds;
     QDialog *m_equalizerWindow = nullptr;
+    QSystemTrayIcon *m_trayIcon = nullptr;
+    QWidget *m_mainPlayerWindow = nullptr;
     QWidget *m_playerBodyContainer = nullptr;
     bool m_windowShaded = false;
     int m_restoreWindowHeight = 116;

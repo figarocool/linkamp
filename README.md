@@ -4,10 +4,26 @@ Riproduttore musicale Linkamp, con interfaccia classica e supporto audio in stre
 
 Maintainer: Stefano Basile <stefanobasile@usa.com>.
 
+**Download:** [ultimi pacchetti e plugin](https://github.com/figarocool/linkamp/releases/latest). Le release includono pacchetti `.deb` per Debian Bookworm/Trixie (amd64 e arm64), installer Windows x64 e installer macOS per Apple Silicon e Intel.
+
+**Plugin browser:** [Chrome/Chromium](https://github.com/figarocool/linkamp/releases/latest/download/linkamp-chrome-extension.zip) · [Firefox](https://github.com/figarocool/linkamp/releases/latest/download/linkamp-firefox-extension.xpi). Se una release non è ancora disponibile, consulta i sorgenti e le istruzioni in [`chrome-extension/`](chrome-extension/README.md) e [`firefox-extension/`](firefox-extension/README.md).
+
+**Installer:** [Windows x64](https://github.com/figarocool/linkamp/releases/latest/download/Linkamp-Setup-windows-x64.exe) · [macOS Apple Silicon](https://github.com/figarocool/linkamp/releases/latest/download/Linkamp-Installer-macos-arm64.dmg) · [macOS Intel](https://github.com/figarocool/linkamp/releases/latest/download/Linkamp-Installer-macos-x64.dmg) · [Linux `.deb`](https://github.com/figarocool/linkamp/releases/latest)
+
+## Cosa fa Linkamp
+
+- Riproduce file audio locali e streaming audio da link YouTube, mantenendo una playlist persistente.
+- Offre un'interfaccia compatta ispirata a Winamp 2 Classic, con supporto alle skin classiche `.wsz`.
+- Include equalizzatore, visualizzatore audio, sorgenti Bluetooth e Spotify, e riproduzione CD nativa su Linux.
+- Le estensioni Chrome/Chromium e Firefox aggiungono il video YouTube corrente alla playlist di Linkamp tramite `linkamp://` e impediscono l'autoplay iniziale.
+
+Le estensioni Firefox pubblicate come `.xpi` in questo progetto non sono firmate da Mozilla: il caricamento è temporaneo da `about:debugging`. Per l'installazione permanente occorre la firma Mozilla Add-ons. L'estensione Chrome/Chromium si carica come pacchetto non pubblicato dalla pagina `chrome://extensions/` in modalità sviluppatore.
+
 ## Requirements
 
 - Qt 6 with Qt Multimedia
 - taglib 1.11.1 or newer
+- libarchive (for Winamp Classic `.wsz` skins)
 - libasound2-dev
 - libpipewire-0.3-dev
 - libcdio-dev
@@ -35,6 +51,7 @@ sudo apt-get install build-essential qt6-base-dev qt6-base-dev-tools qt6-multime
 
 # Install third party library dependencies
 sudo apt-get install libtag1-dev libasound2-dev libpulse-dev libpipewire-0.3-dev libdbus-1-dev -y
+sudo apt-get install libarchive-dev -y
 
 # Install native CD player dependencies
 sudo apt-get install libcdio-dev libcdio-paranoia-dev libcdio-utils libdiscid-dev -y
@@ -72,6 +89,10 @@ make
 
 **Local desktop build:** this installation uses the classic desktop layout: a 275×116 player window and a separate, compact playlist editor. The file picker opens as a separate system dialog.
 
+### Winamp Classic skins
+
+Linkamp can load Winamp 2.x Classic skins packaged as `.wsz` (or ZIP) files, or from an extracted skin folder. Open the player menu and choose **Load Winamp classic skin…** or **Load extracted skin folder…**; use **Use Linkamp default skin** to restore the built-in appearance. Skin selection is saved between launches. Modern Winamp `.wal` skins are not supported.
+
 ## YouTube streaming (local desktop integration)
 
 This local build accepts YouTube URLs from the command line or the playlist's **ADD** menu:
@@ -99,6 +120,45 @@ You can install the newly built packages with the following command (replace pla
 ```bash
 sudo apt install ./linkamp_[version]_[arch].deb
 ```
+
+### Aggiornamenti
+
+Linkamp controlla le nuove release una volta al giorno. Su Windows e macOS il manutentore incluso nell'installer scarica e applica l'aggiornamento. Su Debian installato dal pacchetto ufficiale, il player scarica il `.deb`, ne verifica l'hash SHA-256 e chiede l'autorizzazione amministrativa prima dell'installazione.
+
+### Sistemi operativi supportati
+
+Le release forniscono build per Linux, Windows x64 e macOS (Intel e Apple Silicon). La riproduzione di file e link YouTube è disponibile su tutte le piattaforme. CD, Bluetooth e Spotify, equalizzatore di sistema e analizzatore audio richiedono integrazioni Linux e sono disponibili solo nella build Linux.
+
+---
+
+## English
+
+Linkamp is a compact Qt 6 music player inspired by Winamp 2 Classic. It plays local audio files and streams audio from YouTube links without saving audio files, and it keeps the playlist between launches. It also includes classic `.wsz` skin support, an equalizer, an audio visualizer, Bluetooth and Spotify sources, and native CD playback on Linux.
+
+### Downloads and browser extensions
+
+- [Latest Linux packages and extension downloads](https://github.com/figarocool/linkamp/releases/latest)
+- [Windows x64 installer](https://github.com/figarocool/linkamp/releases/latest/download/Linkamp-Setup-windows-x64.exe)
+- [macOS Apple Silicon installer](https://github.com/figarocool/linkamp/releases/latest/download/Linkamp-Installer-macos-arm64.dmg)
+- [macOS Intel installer](https://github.com/figarocool/linkamp/releases/latest/download/Linkamp-Installer-macos-x64.dmg)
+- [Chrome/Chromium extension ZIP](https://github.com/figarocool/linkamp/releases/latest/download/linkamp-chrome-extension.zip)
+- [Firefox extension XPI](https://github.com/figarocool/linkamp/releases/latest/download/linkamp-firefox-extension.xpi)
+- [Chrome/Chromium source and installation guide](chrome-extension/README.md)
+- [Firefox source and installation guide](firefox-extension/README.md)
+
+The extensions add the open YouTube video to Linkamp through the `linkamp://` protocol and pause YouTube's initial autoplay. The Chrome/Chromium extension is sideloaded in developer mode. The Firefox XPI published here is unsigned and can only be loaded temporarily through `about:debugging`; permanent installation requires signing through Mozilla Add-ons.
+
+### Supported platforms
+
+Release builds are provided for Linux, Windows x64, and macOS (Intel and Apple Silicon). Local file and YouTube playback are available on all platforms. CD, Bluetooth and Spotify sources, system equalizer, and audio visualizer use Linux-specific integrations and are available only in the Linux build.
+
+### Updates
+
+Linkamp checks for new releases once a day. On Windows and macOS, the maintenance tool included with the installer downloads and applies updates. On Debian installations from the official package, Linkamp downloads the matching `.deb`, verifies its SHA-256 digest, and requests administrator authorization before installation.
+
+### Build from source
+
+See the [Italian development and Debian packaging instructions above](#development) and the dependency list at the beginning of this README. Browser extension setup instructions are available in the Chrome/Chromium and Firefox folders.
 
 ### Known issues
 

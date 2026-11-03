@@ -1,4 +1,5 @@
 #include "scrolltext.h"
+#include "winampskin.h"
 #include <QPainter>
 #include <algorithm>
 
@@ -54,7 +55,8 @@ void ScrollText::updateText()
 
 void ScrollText::renderBitmapText(QPainter &p, const QString &text, int startX, int startY)
 {
-    static const QPixmap fontBmp(QStringLiteral(":/assets/classic-text.png"));
+    const QPixmap fontBmp = QPixmap::fromImage(
+        WinampSkin::instance().sheet(QStringLiteral("text")));
     if (fontBmp.isNull()) return;
 
     int curX = startX;

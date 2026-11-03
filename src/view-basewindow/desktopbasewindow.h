@@ -3,6 +3,9 @@
 
 #include <QWidget>
 
+class QMoveEvent;
+class QPaintEvent;
+
 namespace Ui {
 class DesktopBaseWindow;
 }
@@ -15,6 +18,10 @@ public:
     explicit DesktopBaseWindow(QWidget *parent = nullptr);
     ~DesktopBaseWindow();
     Ui::DesktopBaseWindow *ui;
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void moveEvent(QMoveEvent *event) override;
 
 private:
     void scale();
