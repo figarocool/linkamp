@@ -363,6 +363,15 @@ jobs:
             done
           done
 
+          for deb in release/linkamp_*.deb; do
+            [ -e "$deb" ] || continue
+            asset_name=${deb##*/}
+            if [[ "$asset_name" =~ ^(linkamp_[0-9]+\.[0-9]+\.[0-9]+)\.(bookworm|trixie)([0-9]+)_(amd64|arm64)\.deb$ ]]; then
+              alias_name="${BASH_REMATCH[1]}~${BASH_REMATCH[2]}${BASH_REMATCH[3]}_${BASH_REMATCH[4]}.deb"
+              cp "$deb" "release/$alias_name"
+            fi
+          done
+
           cp release-artifacts/linkamp-browser-extensions/* release/
           cp release-artifacts/linkamp-windows-installer/* release/
           cp release-artifacts/linkamp-macos-arm64-installer/* release/

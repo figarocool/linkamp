@@ -113,7 +113,7 @@ void UpdateManager::downloadDebianUpdate(const QJsonObject &release)
     if (codename.isEmpty() || architecture.isEmpty())
         return;
 
-    const QRegularExpression assetPattern(QStringLiteral("^linkamp_%1~%2[0-9]+_%3\\.deb$")
+    const QRegularExpression assetPattern(QStringLiteral("^linkamp_%1[~.]%2[0-9]+_%3\\.deb$")
         .arg(QRegularExpression::escape(m_latestVersion),
              QRegularExpression::escape(codename),
              QRegularExpression::escape(architecture)));
