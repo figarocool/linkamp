@@ -206,9 +206,11 @@ jobs:
           [[ "$LINKAMP_BUILD_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] || LINKAMP_BUILD_VERSION=1.6.3
           export LINKAMP_BUILD_VERSION
           qt_prefix="$(brew --prefix qt)"
+          taglib_prefix="$(brew --prefix taglib)"
+          archive_prefix="$(brew --prefix libarchive)"
           export PATH="$qt_prefix/bin:$PATH"
           cmake -S . -B build -DLINKAMP_ENABLE_LINUX_INTEGRATIONS=OFF \
-            -DCMAKE_PREFIX_PATH="$qt_prefix" \
+            -DCMAKE_PREFIX_PATH="$qt_prefix;$taglib_prefix;$archive_prefix" \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
           cmake --build build --config Release --parallel 2
           cmake --install build --config Release --prefix "$RUNNER_TEMP/linkamp-stage"
