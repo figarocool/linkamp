@@ -239,7 +239,7 @@ jobs:
               packaging/ifw/config.xml.in > ifw/config.xml
           ifw_bin="$RUNNER_TEMP/Qt/Tools/QtInstallerFramework/4.7/bin"
           "$ifw_bin/binarycreator" -c ifw/config.xml -p ifw/packages \
-            -t "$ifw_bin/installerbase" "$RUNNER_TEMP/Linkamp-macos-installer"
+            -t "$ifw_bin/installerbase" "$RUNNER_TEMP/Linkamp-macos-installer.app"
           hdiutil create -volname Linkamp -srcfolder "$RUNNER_TEMP/Linkamp-macos-installer.app" \
             -ov -format UDZO "$RUNNER_TEMP/Linkamp-Installer-macos-arm64.dmg"
           mkdir -p "$RUNNER_TEMP/update-packages"
@@ -307,7 +307,7 @@ jobs:
               packaging/ifw/config.xml.in > ifw/config.xml
           ifw_bin="$RUNNER_TEMP/Qt/Tools/QtInstallerFramework/4.7/bin"
           "$ifw_bin/binarycreator" -c ifw/config.xml -p ifw/packages \
-            -t "$ifw_bin/installerbase" "$RUNNER_TEMP/Linkamp-macos-installer"
+            -t "$ifw_bin/installerbase" "$RUNNER_TEMP/Linkamp-macos-installer.app"
           hdiutil create -volname Linkamp -srcfolder "$RUNNER_TEMP/Linkamp-macos-installer.app" \
             -ov -format UDZO "$RUNNER_TEMP/Linkamp-Installer-macos-x64.dmg"
           mkdir -p "$RUNNER_TEMP/update-packages"
