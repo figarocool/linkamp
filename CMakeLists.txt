@@ -212,9 +212,17 @@ install(TARGETS player
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-qt_generate_deploy_app_script(
-    TARGET player
-    OUTPUT_SCRIPT deploy_script
-    NO_UNSUPPORTED_PLATFORM_ERROR
-)
+if(Qt${QT_VERSION_MAJOR}Core_VERSION VERSION_LESS 6.5)
+    qt_generate_deploy_app_script(
+        TARGET player
+        FILENAME_VARIABLE deploy_script
+        NO_UNSUPPORTED_PLATFORM_ERROR
+    )
+else()
+    qt_generate_deploy_app_script(
+        TARGET player
+        OUTPUT_SCRIPT deploy_script
+        NO_UNSUPPORTED_PLATFORM_ERROR
+    )
+endif()
 install(SCRIPT ${deploy_script})
