@@ -10,6 +10,7 @@
 QMediaMetaData parseMetaData(const QUrl &url);
 
 QString formatDuration(qint64 ms);
+QString repairUtf8Mojibake(QString text);
 
 QStringList audioFileFilters();
 

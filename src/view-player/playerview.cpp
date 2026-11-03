@@ -19,6 +19,7 @@
 #include <QSettings>
 #include <QSpacerItem>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QStyle>
 #include <QStyleOptionSlider>
 
@@ -32,9 +33,26 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     // Setup UI
     ui->setupUi(this);
     scale();
-    m_timeLeftMode = QSettings().value(QStringLiteral("player/timeLeftMode"), true).toBool();
+    m_pauseDash = new QWidget(ui->visualizationBackground);
+    m_pauseDash->setObjectName(QStringLiteral("pauseTimeDash"));
+    m_pauseDash->setGeometry(26 * UI_SCALE, 11 * UI_SCALE,
+                             5 * UI_SCALE, UI_SCALE);
+    m_pauseDash->setStyleSheet(QStringLiteral(
+        "background-color: #00f800; border: none;"));
+    m_pauseDash->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_pauseDash->hide();
+    // These indicators overlap the spectrum grid by design, like Winamp's
+    // masked PLAYPAUS.BMP blit. Keep them above the spectrum child widget.
+    ui->playStatusIcon->raise();
+    m_pauseDash->raise();
+    m_timeLeftMode = QSettings().value(QStringLiteral("player/timeLeftMode"), false).toBool();
     ui->progressTimeLabel->installEventFilter(this);
     ui->posBar->installEventFilter(this);
+    m_pauseBlinkTimer.setInterval(500);
+    connect(&m_pauseBlinkTimer, &QTimer::timeout, this, [this] {
+        m_pauseTimeVisible = !m_pauseTimeVisible;
+        ui->progressTimeLabel->setVisible(m_pauseTimeVisible);
+    });
     // Keep the Classic volume controls out of the compressed right-column
     // layout. Their 13px sprite tracks extend below that row and get clipped
     // as soon as the seek bar becomes active.
@@ -78,9 +96,12 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     const QImage titlebarAtlas = WinampSkin::instance().sheet(QStringLiteral("titlebar-atlas"));
     if (!titlebarAtlas.isNull())
         visualModeLabels->setPixmap(QPixmap::fromImage(titlebarAtlas.copy(304, 0, 8, 43)));
-    visualModeLabels->setGeometry(QRect(ui->visualizationBackground->mapTo(
-                                            this, QPoint(2, 7 * UI_SCALE)),
-                                        QSize(8, 43)));
+    // Winamp draws this titlebar.bmp strip at main-window coordinates
+    // (10, 22), size 8x43. PlayerView starts below the 14 px titlebar, so
+    // anchoring it to visualizationBackground shifted and clipped the letters.
+    visualModeLabels->setGeometry(QRect(
+        QPoint(10 * UI_SCALE, 8 * UI_SCALE),
+        QSize(8 * UI_SCALE, 43 * UI_SCALE)));
     ui->monoLabel->hide();
     ui->stereoLabel->hide();
     m_monoIndicator = new QLabel(this);
@@ -313,10 +334,10 @@ void PlayerView::scale()
     ui->playStatusIcon->setMinimumSize(ui->playStatusIcon->minimumSize() * UI_SCALE);
     QRect psiGeo = ui->playStatusIcon->geometry();
     ui->playStatusIcon->setGeometry(psiGeo.x()*UI_SCALE,
-                                    psiGeo.y()*UI_SCALE + UI_SCALE,
+                                    psiGeo.y()*UI_SCALE,
                                     psiGeo.width(), psiGeo.height());
 
-    ui->progressTimeLabel->setGeometry(35*UI_SCALE, 4*UI_SCALE,
+    ui->progressTimeLabel->setGeometry(32*UI_SCALE, 4*UI_SCALE,
                                        54*UI_SCALE, 20*UI_SCALE);
     QFont ptlFont = ui->progressTimeLabel->font();
     ptlFont.setWordSpacing(-2);
@@ -343,22 +364,31 @@ void PlayerView::setDeferredSeekEnabled(bool enabled)
 void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
 {
     m_playbackState = state;
+    if (state == MediaPlayer::PausedState) {
+        m_pauseTimeVisible = true;
+        ui->progressTimeLabel->setVisible(true);
+        m_pauseBlinkTimer.start();
+    } else {
+        m_pauseBlinkTimer.stop();
+        m_pauseTimeVisible = true;
+        ui->progressTimeLabel->setVisible(true);
+    }
+    m_pauseDash->setVisible(state != MediaPlayer::StoppedState
+                            && (state == MediaPlayer::PausedState || m_timeLeftMode));
     updatePositionSliderStyle();
+    if (state != MediaPlayer::StoppedState)
+        updateDurationInfo(m_currentPositionSeconds);
     setChannelIndicators(m_monoPlayback, state != MediaPlayer::StoppedState);
-    QString imageSrc;
     switch(state) {
     case MediaPlayer::StoppedState:
         if(spectrum) spectrum->stop();
-        imageSrc = ":/assets/status_stopped.png";
         ui->progressTimeLabel->setText("");
         break;
     case MediaPlayer::PlayingState:
         if(spectrum) spectrum->play();
-        imageSrc = ":/assets/status_playing.png";
         break;
     case MediaPlayer::PausedState:
         if(spectrum) spectrum->pause();
-        imageSrc = ":/assets/status_paused.png";
         break;
     }
 
@@ -374,13 +404,52 @@ void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
         ui->balanceSlider->repaint();
     }
 
-    // Set play status icon
-    QPixmap image;
-    image.load(imageSrc);
-    QGraphicsScene *scene = new QGraphicsScene(this);
-    scene->addPixmap(image);
-    scene->setSceneRect(image.rect());
-    ui->playStatusIcon->setScene(scene);
+    // Match Winamp's PLAYPAUS.BMP composition: a 9x9 transport glyph plus
+    // the 3x9 green/red status marker immediately to its left while playing.
+    updatePlaybackStatusIcon();
+}
+
+void PlayerView::updatePlaybackStatusIcon()
+{
+    const QImage sprite = WinampSkin::instance().sheet(QStringLiteral("playpaus"));
+    if (sprite.width() >= 42 && sprite.height() >= 9) {
+        int iconOffset = 18;
+        int markerOffset = 27;
+        int markerWidth = 2;
+        if (m_playbackState == MediaPlayer::PlayingState) {
+            iconOffset = 0;
+            markerOffset = 36;
+            markerWidth = 3;
+        } else if (m_playbackState == MediaPlayer::PausedState) {
+            iconOffset = 9;
+        }
+
+        // Winamp's original masked blit leaves the spectrum grid visible
+        // through black pixels in PLAYPAUS.BMP. Preserve that with alpha.
+        QImage image(11, 9, QImage::Format_ARGB32);
+        image.fill(Qt::transparent);
+        auto copyMasked = [&sprite, &image](int sourceX, int targetX, int width) {
+            for (int y = 0; y < 9; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    const QColor color = sprite.pixelColor(sourceX + x, y);
+                    if (color.red() || color.green() || color.blue())
+                        image.setPixelColor(targetX + x, y, color);
+                }
+            }
+        };
+        copyMasked(iconOffset, 2, 9);
+        copyMasked(markerOffset, 0, markerWidth);
+
+        QGraphicsScene *scene = ui->playStatusIcon->scene();
+        if (!scene) {
+            scene = new QGraphicsScene(this);
+            ui->playStatusIcon->setScene(scene);
+        }
+        scene->clear();
+        scene->addPixmap(QPixmap::fromImage(image));
+        scene->setSceneRect(image.rect());
+        ui->playStatusIcon->raise();
+    }
 }
 
 void PlayerView::updatePositionSliderStyle()
@@ -419,13 +488,20 @@ void PlayerView::setPosition(qint64 progress)
 
 void PlayerView::setSpectrumData(const QByteArray& data, QAudioFormat format)
 {
+    m_audioSampleRateHz = format.sampleRate();
+    if (m_audioSampleRateHz > 0 && ui->khzValueLabel->text().isEmpty()) {
+        ui->khzValueLabel->setText(QString::number(m_audioSampleRateHz / 1000));
+        ui->khzValueLabel->show();
+        ui->khzValueLabel->raise();
+    }
     spectrum->setData(data, format);
 }
 
 void PlayerView::setMetadata(QMediaMetaData metadata)
 {
     // Generate track info string
-    const QString title = metadata.value(QMediaMetaData::Title).toString();
+    const QString title = repairUtf8Mojibake(
+        metadata.value(QMediaMetaData::Title).toString());
     emit currentTrackTitleChanged(title.trimmed());
 
     //  Calculate duration
@@ -448,7 +524,9 @@ void PlayerView::setMetadata(QMediaMetaData metadata)
     // Set kbps
     int bitrate = metadata.value(QMediaMetaData::AudioBitRate).toInt();
     QString codec = metadata.value(QMediaMetaData::Description).toString(); // Using Description as codec
-    if(bitrate > 0) {
+    // FFmpeg may report a transient MPEG frame rate such as 4 kb/s. It is
+    // not the stream bitrate and Winamp does not display that as a valid rate.
+    if(bitrate >= 8000) {
         bitrate = bitrate/1000;
         ui->kbpsValueLabel->setText(QString::number(bitrate));
     } else if(codec.length()) {
@@ -458,9 +536,21 @@ void PlayerView::setMetadata(QMediaMetaData metadata)
     }
 
     // Set kHz
-    int khz = metadata.value(QMediaMetaData::Comment).toString().toInt()/1000;
+    bool sampleRateOk = false;
+    int sampleRate = metadata.value(QMediaMetaData::Comment).toString().toInt(&sampleRateOk);
+    if ((!sampleRateOk || sampleRate <= 0) && m_audioSampleRateHz > 0)
+        sampleRate = m_audioSampleRateHz;
+    const int khz = sampleRate / 1000;
     ui->khzValueLabel->setText(khz > 0 ? QString::number(khz) : "");
-
+    // Keep the values above the frame's themed background after a skin change.
+    // Some skins restyle/repaint the frames after their child labels, leaving
+    // the text present but visually buried until another full repaint.
+    ui->kbpsValueLabel->show();
+    ui->khzValueLabel->show();
+    ui->kbpsValueLabel->raise();
+    ui->khzValueLabel->raise();
+    ui->kbpsValueLabel->update();
+    ui->khzValueLabel->update();
 }
 
 void PlayerView::setChannelIndicators(bool mono, bool active)
@@ -486,6 +576,17 @@ void PlayerView::setDuration(qint64 duration)
     ui->posBar->setVisible(true);
     ui->volumeSlider->repaint();
     ui->balanceSlider->repaint();
+}
+
+void PlayerView::refreshSkin()
+{
+    // Skin refreshes replace the slider's sprite URLs. Reapply its canonical
+    // stylesheet and visibility so switching back to Classic restores it too.
+    updatePositionSliderStyle();
+    ui->posBar->setVisible(true);
+    ui->posBar->updateGeometry();
+    ui->posBar->update();
+    updatePlaybackStatusIcon();
 }
 
 void PlayerView::setVolume(int volume)
@@ -561,8 +662,7 @@ void PlayerView::updateDurationInfo(qint64 currentInfo)
         : m_currentPositionSeconds;
     const QString minutes = QString::number(seconds / 60).rightJustified(2, QLatin1Char('0'));
     const QString remainder = QString::number(seconds % 60).rightJustified(2, QLatin1Char('0'));
-    const QString tDisplayStr = (m_timeLeftMode ? QStringLiteral("-") : QString())
-                              + minutes + QLatin1Char(':') + remainder;
+    const QString tDisplayStr = minutes + QLatin1Char(':') + remainder;
     ui->progressTimeLabel->setText(tDisplayStr);
 }
 
@@ -605,6 +705,9 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
         if (mouseEvent->button() == Qt::LeftButton) {
             m_timeLeftMode = !m_timeLeftMode;
             QSettings().setValue(QStringLiteral("player/timeLeftMode"), m_timeLeftMode);
+            m_pauseDash->setVisible(m_playbackState != MediaPlayer::StoppedState
+                                    && (m_playbackState == MediaPlayer::PausedState
+                                        || m_timeLeftMode));
             updateDurationInfo(m_currentPositionSeconds);
             return true;
         }

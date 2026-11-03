@@ -5,6 +5,7 @@
 #include <QStackedLayout>
 #include <QProcess>
 #include <QSet>
+#include <QUrl>
 #include "audiosourcecoordinator.h"
 #include "audiosourcefile.h"
 #ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
@@ -18,6 +19,7 @@
 #include "systemequalizer.h"
 #include "qmediaplaylist.h"
 #include "playlistmodel.h"
+#include "cloudplaylistsync.h"
 
 class QDialog;
 class QMoveEvent;
@@ -59,6 +61,7 @@ public slots:
     void addFolderToPlaylist();
     void promptForYouTubeUrl();
     void addYouTubeUrl(const QString &url);
+    void installSkinFromUrl(const QUrl &url, const QString &fileName);
 
 protected:
     void moveEvent(QMoveEvent *event) override;
@@ -72,8 +75,15 @@ private:
     void schedulePlaylistSave();
     void saveSavedPlaylist();
     static QString defaultPlaylistPath();
+    QByteArray serializePlaylist() const;
+    void applyCloudPlaylist(const QByteArray &data);
+    void refreshAttachedWindowPositions();
     QTimer *m_playlistSaveTimer = nullptr;
+    int m_cloudRestoreIndex = -1;
+    bool m_cloudLoadPending = false;
     bool m_isLoadingPlaylist = false;
+    bool m_cloudResumePending = true;
+    CloudPlaylistSync *m_cloudPlaylistSync = nullptr;
 
 private:
     QMediaPlaylist *m_playlist = nullptr;

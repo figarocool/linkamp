@@ -17,7 +17,6 @@
 #include <QResizeEvent>
 #include <QSettings>
 #include <QPixmap>
-#include <QStringDecoder>
 #include <QUrl>
 #include <QWheelEvent>
 #include <QKeyEvent>
@@ -31,29 +30,6 @@ constexpr int kWindowHeight = 116;
 constexpr int kListTop = 21;
 constexpr int kListBottomInset = 38;
 constexpr int kRowHeight = 12;
-
-static int mojibakeMarkerCount(const QString &text)
-{
-    return text.count(QChar(0x00c3)) + text.count(QChar(0x00c2))
-        + text.count(QStringLiteral("â€"));
-}
-
-static QString repairUtf8Mojibake(QString text)
-{
-    for (int pass = 0; pass < 12; ++pass) {
-        const int currentMarkers = mojibakeMarkerCount(text);
-        if (currentMarkers == 0)
-            break;
-
-        const QByteArray bytes = text.toLatin1();
-        QStringDecoder decoder(QStringConverter::Utf8);
-        const QString candidate = decoder(bytes);
-        if (decoder.hasError() || mojibakeMarkerCount(candidate) >= currentMarkers)
-            break;
-        text = candidate;
-    }
-    return text;
-}
 
 static void renderBitmapTextPl(QPainter &p, const QString &text, int startX, int startY,
                                bool selected, bool current)
@@ -492,13 +468,14 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         // for the small LCD readouts and drawing rows with it makes them look
         // like a tiny green terminal instead of the original playlist.
         QFont rowFont(QStringLiteral("Arial"));
-        rowFont.setPixelSize(10);
+        rowFont.setPointSize(8);
         rowFont.setStyleStrategy(QFont::StyleStrategy(
             QFont::PreferAntialias | QFont::NoSubpixelAntialias));
         painter.setFont(rowFont);
         painter.setPen(QColor(255, 255, 255));
         const QFontMetrics metrics(rowFont);
-        const int textBaseline = y + 11;
+        const int textBaseline = y + (kRowHeight - metrics.height()) / 2
+                               + metrics.ascent();
         painter.save();
         painter.setClipRect(QRect(14, y, maxTextWidth, kRowHeight));
         painter.drawText(14, textBaseline, fullTitle);

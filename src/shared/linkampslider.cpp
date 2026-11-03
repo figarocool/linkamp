@@ -20,7 +20,7 @@ void LinkampSlider::paintEvent(QPaintEvent *event)
     WinampSkin &skin = WinampSkin::instance();
     const bool isVolume = objectName() == QLatin1String("volumeSlider");
     const bool isBalance = objectName() == QLatin1String("balanceSlider");
-    if ((!isVolume && !isBalance) || skin.isLoaded()) {
+    if (!isVolume && !isBalance) {
         QSlider::paintEvent(event);
         return;
     }

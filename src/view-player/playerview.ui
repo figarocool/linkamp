@@ -602,13 +602,13 @@
           <number>0</number>
          </property>
          <property name="leftMargin">
-          <number>1</number>
+          <number>6</number>
          </property>
          <property name="topMargin">
           <number>8</number>
          </property>
          <property name="rightMargin">
-          <number>0</number>
+          <number>11</number>
          </property>
          <item>
           <widget class="QFrame" name="songInfoContainer">
@@ -626,11 +626,8 @@
            </property>
            <property name="styleSheet">
             <string notr="true">#songInfoContainer {
-	background-color: #000000;
-	border-top: 1px solid #26253c;
-	border-right: 1px solid #6d6d7f;
-	border-bottom: 1px solid #6d6d7f;
-	border-left: 1px solid #26253c;
+	background: transparent;
+	border: none;
 }</string>
            </property>
            <layout class="QHBoxLayout" name="horizontalLayout_3">
@@ -724,7 +721,7 @@
              <number>0</number>
             </property>
             <property name="topMargin">
-             <number>3</number>
+             <number>9</number>
             </property>
             <property name="rightMargin">
              <number>5</number>
@@ -1527,10 +1524,13 @@ QCheckBox::indicator:indeterminate:pressed {
         <number>0</number>
        </property>
        <property name="leftMargin">
-        <number>5</number>
+        <number>16</number>
+       </property>
+       <property name="topMargin">
+        <number>15</number>
        </property>
        <property name="rightMargin">
-        <number>2</number>
+        <number>15</number>
        </property>
        <property name="bottomMargin">
         <number>0</number>

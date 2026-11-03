@@ -131,6 +131,7 @@
         <file alias="assets/classic-eqmain.png">skin/classic-private/classic-eqmain.png</file>
         <file alias="assets/classic-titlebar.png">skin/classic-private/classic-titlebar.png</file>
         <file alias="assets/classic-titlebar-atlas.png">skin/classic-private/classic-titlebar-atlas.png</file>
+        <file alias="assets/classic-playpaus.png">skin/classic-private/classic-playpaus.png</file>
         <file>assets/linkamp-mark.png</file>
         <file alias="assets/classic-menu.png">skin/classic-private/classic-menu.png</file>
         <file alias="assets/classic-text.png">skin/classic-private/classic-text.png</file>

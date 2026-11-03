@@ -45,6 +45,7 @@ private:
     bool m_classicEqualizerStyle = false;
     bool m_pressedEqualizerClose = false;
     bool m_pressedEqualizerShade = false;
+    bool m_pressedWindowClose = false;
 };
 
 #endif // TITLEBAR_H

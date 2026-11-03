@@ -4,6 +4,13 @@
 #include <QTimer>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QSaveFile>
+#include <QRegularExpression>
+#include <QHostAddress>
 
 #include "mainwindow.h"
 #include "desktopplayerwindow.h"
@@ -39,6 +46,8 @@
 #include <QSettings>
 #include <QSystemTrayIcon>
 #include <QIcon>
+#include <QMouseEvent>
+#include <QBuffer>
 
 #include <algorithm>
 
@@ -61,7 +70,7 @@ const unsigned int WINDOW_H = 116 * UI_SCALE;
 namespace {
 int windowBottomOnScreen(const QWidget *window)
 {
-    return window->pos().y() + window->height();
+    return window->frameGeometry().bottom() + 1;
 }
 }
 
@@ -86,6 +95,15 @@ MainWindow::MainWindow(QWidget *parent)
     // Setup playlist
     m_playlistModel = new PlaylistModel(this);
     m_playlist = m_playlistModel->playlist();
+    m_cloudPlaylistSync = new CloudPlaylistSync(this);
+    connect(m_cloudPlaylistSync, &CloudPlaylistSync::playlistDownloaded,
+            this, &MainWindow::applyCloudPlaylist);
+    connect(m_cloudPlaylistSync, &CloudPlaylistSync::statusChanged,
+            this, [](const QString &message) { qInfo() << message; });
+    connect(m_cloudPlaylistSync, &CloudPlaylistSync::errorOccurred,
+            this, [this](const QString &message) {
+        QMessageBox::warning(this, tr("Playlist cloud"), message);
+    });
     connect(m_playlist, &QMediaPlaylist::mediaInserted, this, &MainWindow::schedulePlaylistSave);
     connect(m_playlist, &QMediaPlaylist::mediaRemoved, this, &MainWindow::schedulePlaylistSave);
     connect(m_playlist, &QMediaPlaylist::mediaChanged, this, &MainWindow::schedulePlaylistSave);
@@ -93,7 +111,6 @@ MainWindow::MainWindow(QWidget *parent)
         QSettings().setValue(QStringLiteral("playlist/currentIndex"), index);
     });
     connect(qApp, &QCoreApplication::aboutToQuit, this, &MainWindow::saveSavedPlaylist);
-    loadSavedPlaylist();
 
     // Setup views
     controlButtons = new ControlButtonsWidget(this);
@@ -117,7 +134,28 @@ MainWindow::MainWindow(QWidget *parent)
         if (m_playlist->currentIndex() != index)
             m_playlist->setCurrentIndex(index);
     };
-    connect(m_playlist, &QMediaPlaylist::loaded, this, restoreSelectedTrack);
+    connect(m_playlist, &QMediaPlaylist::loaded, this, [this, restoreSelectedTrack] {
+        if (m_cloudLoadPending) {
+            m_cloudLoadPending = false;
+            m_isLoadingPlaylist = false;
+            int restoreIndex = m_cloudRestoreIndex;
+            if (restoreIndex < 0)
+                restoreIndex = QSettings().value(QStringLiteral("playlist/currentIndex"), 0).toInt();
+            if (m_playlist->mediaCount() > 0)
+                m_playlist->setCurrentIndex(qBound(0, restoreIndex,
+                                                   m_playlist->mediaCount() - 1));
+            m_cloudRestoreIndex = -1;
+        } else {
+            restoreSelectedTrack();
+        }
+        if (playlist)
+            playlist->update();
+        if (m_cloudResumePending) {
+            m_cloudResumePending = false;
+            m_cloudPlaylistSync->publish(serializePlaylist());
+            m_cloudPlaylistSync->resumeSavedProvider();
+        }
+    });
     restoreSelectedTrack();
 #ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     btSource = new AudioSourcePython(LINKAMP_PY_MODULE, "BTPlayer", this);
@@ -156,6 +194,9 @@ MainWindow::MainWindow(QWidget *parent)
                 : QStringLiteral("%1 - Linkamp").arg(trackTitle));
         });
         m_mainPlayerWindow->installEventFilter(this);
+        // Winamp opens its player menu from a right-click on the main window.
+        // The compact Linkamp shell is a separate top-level widget, so handle
+        // the context event there as well as from the menu button.
         const QString mainPositionKey = QStringLiteral("windows/main/position");
         if (QSettings().contains(mainPositionKey))
             m_mainPlayerWindow->move(QSettings().value(mainPositionKey).toPoint());
@@ -183,13 +224,17 @@ MainWindow::MainWindow(QWidget *parent)
     playerContentLayout->setContentsMargins(0, 0, 0, 0);
     playerContentLayout->addWidget(playerWindowContent);
     playerWindow->ui->body->setLayout(playerContentLayout);
+    if (m_mainPlayerWindow) {
+        const auto childWidgets = m_mainPlayerWindow->findChildren<QWidget *>();
+        for (QWidget *child : childWidgets)
+            child->installEventFilter(this);
+    }
 
     // Keep the classic playlist editor as a separate compact top-level window.
     playlist = new ClassicPlaylistWindow(m_playlist, this);
     if (playlist->property("savedWindowPosition").toBool()) {
         m_lastPlaylistPosition = playlist->pos();
         m_havePlaylistPosition = true;
-        m_playlistAttached = false;
     }
     playlist->installEventFilter(this);
     connect(player, &PlayerView::playbackPositionChanged, playlist, &ClassicPlaylistWindow::setPosition);
@@ -210,6 +255,33 @@ MainWindow::MainWindow(QWidget *parent)
         finishAttachedWindowDrag(playlist);
     });
 
+    // Restore only after the playlist view has subscribed to insertion and
+    // current-index changes, so a fast local M3U load is painted immediately.
+    connect(m_playlist, &QMediaPlaylist::loadFailed, this, [this] {
+        if (m_cloudLoadPending) {
+            m_cloudLoadPending = false;
+            m_isLoadingPlaylist = false;
+            m_cloudRestoreIndex = -1;
+        }
+        qWarning() << "Unable to restore saved playlist:" << m_playlist->errorString();
+        if (m_cloudResumePending) {
+            m_cloudResumePending = false;
+            m_cloudPlaylistSync->publish(serializePlaylist());
+            m_cloudPlaylistSync->resumeSavedProvider();
+        }
+    });
+    QSettings().remove(QStringLiteral("playlist/cloudFile"));
+    loadSavedPlaylist();
+    if (!QFile::exists(defaultPlaylistPath())) {
+        QTimer::singleShot(0, this, [this] {
+            if (!m_cloudResumePending)
+                return;
+            m_cloudResumePending = false;
+            m_cloudPlaylistSync->publish(serializePlaylist());
+            m_cloudPlaylistSync->resumeSavedProvider();
+        });
+    }
+
     // The equalizer is also a separate classic-style window.
     m_equalizerWindow = new QDialog(this, Qt::Tool | Qt::FramelessWindowHint);
     m_equalizerWindow->installEventFilter(this);
@@ -220,7 +292,30 @@ MainWindow::MainWindow(QWidget *parent)
         m_equalizerWindow->move(QSettings().value(equalizerPositionKey).toPoint());
         m_lastEqualizerPosition = m_equalizerWindow->pos();
         m_haveEqualizerPosition = true;
-        m_equalizerAttached = false;
+    }
+    const auto windowsAreAdjacent = [](const QWidget *first, const QWidget *second) {
+        if (!first || !second)
+            return false;
+        const QRect a = first->frameGeometry();
+        const QRect b = second->frameGeometry();
+        constexpr int snapDistance = 12;
+        const int horizontalOverlap = std::min(a.right(), b.right())
+                                    - std::max(a.left(), b.left());
+        const int verticalOverlap = std::min(a.bottom(), b.bottom())
+                                  - std::max(a.top(), b.top());
+        const bool verticallyAdjacent = horizontalOverlap >= 20
+            && (qAbs(b.top() - a.bottom() - 1) <= snapDistance
+                || qAbs(a.top() - b.bottom() - 1) <= snapDistance);
+        const bool horizontallyAdjacent = verticalOverlap >= 20
+            && (qAbs(b.left() - a.right() - 1) <= snapDistance
+                || qAbs(a.left() - b.right() - 1) <= snapDistance);
+        return verticallyAdjacent || horizontallyAdjacent;
+    };
+    if (m_haveEqualizerPosition)
+        m_equalizerAttached = windowsAreAdjacent(m_mainPlayerWindow, m_equalizerWindow);
+    if (m_havePlaylistPosition) {
+        m_playlistAttached = windowsAreAdjacent(m_mainPlayerWindow, playlist)
+            || (m_equalizerAttached && windowsAreAdjacent(m_equalizerWindow, playlist));
     }
     m_equalizerWindow->setStyleSheet("QDialog { background: transparent; border: 0px; }");
     auto *equalizerWindowLayout = new QVBoxLayout(m_equalizerWindow);
@@ -304,7 +399,8 @@ MainWindow::~MainWindow()
 
 QString MainWindow::defaultPlaylistPath()
 {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    const QString configDir = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
+    const QString dir = QDir(configDir).filePath(QCoreApplication::organizationName());
     QDir().mkpath(dir);
     return QDir(dir).filePath(QStringLiteral("playlist.m3u8"));
 }
@@ -344,11 +440,46 @@ void MainWindow::saveSavedPlaylist()
 
     const QString path = defaultPlaylistPath();
     m_playlist->save(QUrl::fromLocalFile(path), "m3u8");
+    m_cloudPlaylistSync->publish(serializePlaylist());
+}
+
+QByteArray MainWindow::serializePlaylist() const
+{
+    if (!m_playlist)
+        return {};
+    QByteArray data;
+    QBuffer buffer(&data);
+    if (!buffer.open(QIODevice::WriteOnly) || !m_playlist->save(&buffer, "m3u8"))
+        return {};
+    return data;
+}
+
+void MainWindow::applyCloudPlaylist(const QByteArray &data)
+{
+    if (data.isEmpty() || !data.trimmed().startsWith("#EXTM3U")) {
+        QMessageBox::warning(this, tr("Playlist cloud"),
+                             tr("Il file playlist nel cloud è vuoto o non è un M3U valido."));
+        return;
+    }
+
+    QBuffer buffer;
+    buffer.setData(data);
+    if (!buffer.open(QIODevice::ReadOnly))
+        return;
+    m_cloudRestoreIndex = m_playlist->currentIndex();
+    m_cloudLoadPending = true;
+    m_isLoadingPlaylist = true;
+    m_playlist->clear();
+    m_playlist->load(&buffer, "m3u8");
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     saveSavedPlaylist();
+    if (playlist)
+        playlist->close();
+    if (m_equalizerWindow)
+        m_equalizerWindow->close();
     QMainWindow::closeEvent(event);
 }
 
@@ -403,9 +534,37 @@ void MainWindow::showMenu()
     QAction *playlistAction = menu.addAction(tr("Playlist editor"));
     QAction *equalizerAction = menu.addAction(tr("Equalizer"));
     menu.addSeparator();
-    QAction *loadSkinAction = menu.addAction(tr("Load Winamp classic skin…"));
-    QAction *loadSkinFolderAction = menu.addAction(tr("Load extracted skin folder…"));
-    QAction *defaultSkinAction = menu.addAction(tr("Use Linkamp default skin"));
+    QMenu *sharedPlaylistMenu = menu.addMenu(tr("Shared playlist"));
+    QAction *googleDriveAction = sharedPlaylistMenu->addAction(tr("Connect Google Drive…"));
+    QAction *oneDriveAction = sharedPlaylistMenu->addAction(tr("Connect OneDrive…"));
+    QAction *disconnectSharedPlaylist = nullptr;
+    if (!QSettings().value(QStringLiteral("cloud/provider")).toString().isEmpty())
+        disconnectSharedPlaylist = sharedPlaylistMenu->addAction(tr("Disconnect cloud playlist"));
+    menu.addSeparator();
+    QMenu *skinMenu = menu.addMenu(tr("Skins"));
+    const QString skinDirectory = QDir(QStandardPaths::writableLocation(
+        QStandardPaths::AppDataLocation)).filePath(QStringLiteral("skins"));
+    QDir().mkpath(skinDirectory);
+    const QFileInfoList availableSkinFiles = QDir(skinDirectory).entryInfoList(
+        {QStringLiteral("*.wsz"), QStringLiteral("*.zip")}, QDir::Files, QDir::Name);
+    QFileInfoList installedSkins;
+    for (const QFileInfo &skinFile : availableSkinFiles) {
+        // The bundled Classic is the default already; don't offer an identical
+        // separately-installed copy as a second choice.
+        if (skinFile.completeBaseName().compare(QStringLiteral("Winamp Classic"),
+                                                Qt::CaseInsensitive) != 0)
+            installedSkins.append(skinFile);
+    }
+    for (const QFileInfo &skinFile : installedSkins) {
+        QAction *skinAction = skinMenu->addAction(skinFile.completeBaseName());
+        skinAction->setData(skinFile.absoluteFilePath());
+    }
+    if (!installedSkins.isEmpty())
+        skinMenu->addSeparator();
+    QAction *loadSkinAction = skinMenu->addAction(tr("Select skin file…"));
+    QAction *loadSkinFolderAction = skinMenu->addAction(tr("Select extracted skin folder…"));
+    skinMenu->addSeparator();
+    QAction *defaultSkinAction = skinMenu->addAction(tr("Classic (Linkamp default)"));
     menu.addSeparator();
     QAction *fileSourceAction = menu.addAction(tr("File source"));
 #ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
@@ -423,6 +582,16 @@ void MainWindow::showMenu()
         showPlaylist();
     else if (selected == equalizerAction)
         showEqualizer();
+    else if (selected == googleDriveAction || selected == oneDriveAction) {
+        QSettings().remove(QStringLiteral("playlist/cloudFile"));
+        m_cloudPlaylistSync->publish(serializePlaylist());
+        m_cloudPlaylistSync->connectProvider(selected == googleDriveAction
+            ? CloudPlaylistSync::Provider::GoogleDrive
+            : CloudPlaylistSync::Provider::OneDrive);
+    } else if (selected == disconnectSharedPlaylist) {
+        m_cloudPlaylistSync->disconnectProvider();
+        QSettings().remove(QStringLiteral("playlist/cloudFile"));
+    }
     else if (selected == loadSkinAction) {
         const QString path = QFileDialog::getOpenFileName(
             this, tr("Load Winamp classic skin"), QString(),
@@ -431,6 +600,8 @@ void MainWindow::showMenu()
             QString skinError;
             if (!WinampSkin::instance().load(path, &skinError))
                 QMessageBox::warning(this, tr("Skin non caricata"), skinError);
+            else
+                refreshAttachedWindowPositions();
         }
     } else if (selected == loadSkinFolderAction) {
         const QString path = QFileDialog::getExistingDirectory(
@@ -439,9 +610,19 @@ void MainWindow::showMenu()
             QString skinError;
             if (!WinampSkin::instance().load(path, &skinError))
                 QMessageBox::warning(this, tr("Skin non caricata"), skinError);
+            else
+                refreshAttachedWindowPositions();
         }
     } else if (selected == defaultSkinAction) {
         WinampSkin::instance().reset();
+        refreshAttachedWindowPositions();
+    } else if (selected && selected->data().canConvert<QString>()
+               && !selected->data().toString().isEmpty()) {
+        QString skinError;
+        if (!WinampSkin::instance().load(selected->data().toString(), &skinError))
+            QMessageBox::warning(this, tr("Skin non caricata"), skinError);
+        else
+            refreshAttachedWindowPositions();
     }
     else if (selected == fileSourceAction)
         coordinator->setSource(0);
@@ -547,6 +728,19 @@ void MainWindow::changeEvent(QEvent *event)
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     QWidget *window = qobject_cast<QWidget *>(watched);
+    if (window != nullptr && m_mainPlayerWindow
+        && (window == m_mainPlayerWindow || m_mainPlayerWindow->isAncestorOf(window))
+        ) {
+        if (event->type() == QEvent::ContextMenu) {
+            showMenu();
+            return true;
+        }
+        if (event->type() == QEvent::MouseButtonRelease
+            && static_cast<QMouseEvent *>(event)->button() == Qt::RightButton) {
+            showMenu();
+            return true;
+        }
+    }
     if (window != nullptr && event->type() == QEvent::Move
         && (window == m_mainPlayerWindow || window == playlist || window == m_equalizerWindow)) {
         QPoint *lastPosition = window == m_mainPlayerWindow ? &m_lastMainPosition
@@ -600,6 +794,45 @@ void MainWindow::moveAttachedWindows(QWidget *source, const QPoint &delta)
     m_syncingAttachedWindows = false;
 }
 
+void MainWindow::refreshAttachedWindowPositions()
+{
+    if (!m_mainPlayerWindow)
+        return;
+    if (m_equalizerWindow) {
+        m_equalizerWindow->updateGeometry();
+    }
+    if (player)
+        player->refreshSkin();
+
+    // A skin can change child size hints and the window manager then adjusts
+    // top-level positions during polish. Reapply the established vertical
+    // stack after those layout events, while retaining each attachment flag.
+    QTimer::singleShot(0, this, [this] {
+        if (!m_mainPlayerWindow)
+            return;
+        m_syncingAttachedWindows = true;
+        const int left = m_mainPlayerWindow->frameGeometry().left();
+        if (m_equalizerWindow && m_equalizerAttached) {
+            m_equalizerWindow->move(left, windowBottomOnScreen(m_mainPlayerWindow));
+            if (playlist && m_playlistAttached && playlist->isVisible())
+                playlist->move(left, windowBottomOnScreen(m_equalizerWindow));
+        } else if (playlist && m_playlistAttached && playlist->isVisible()) {
+            playlist->move(left, windowBottomOnScreen(m_mainPlayerWindow));
+        }
+        m_lastMainPosition = m_mainPlayerWindow->pos();
+        m_haveMainPosition = true;
+        if (playlist) {
+            m_lastPlaylistPosition = playlist->pos();
+            m_havePlaylistPosition = true;
+        }
+        if (m_equalizerWindow) {
+            m_lastEqualizerPosition = m_equalizerWindow->pos();
+            m_haveEqualizerPosition = true;
+        }
+        m_syncingAttachedWindows = false;
+    });
+}
+
 void MainWindow::beginAttachedWindowDrag(QWidget *window, bool detach)
 {
     if (window == m_mainPlayerWindow || window == this) {
@@ -610,12 +843,12 @@ void MainWindow::beginAttachedWindowDrag(QWidget *window, bool detach)
         }
     } else if (window == playlist) {
         m_playlistForceDetach = detach;
-        // Dragging an attached child window away from the group detaches it.
-        // On release it will snap back if it was only nudged slightly.
-        m_playlistAttached = false;
+        if (detach)
+            m_playlistAttached = false;
     } else if (window == m_equalizerWindow) {
         m_equalizerForceDetach = detach;
-        m_equalizerAttached = false;
+        if (detach)
+            m_equalizerAttached = false;
     }
 }
 
@@ -973,5 +1206,118 @@ void MainWindow::addYouTubeUrl(const QString &rawUrl)
         QStringLiteral("--quiet"), QStringLiteral("--skip-download"),
         QStringLiteral("--dump-single-json"), QStringLiteral("--"),
         url.toString(QUrl::FullyEncoded)
+    });
+}
+
+void MainWindow::installSkinFromUrl(const QUrl &url, const QString &requestedFileName)
+{
+    QHostAddress hostAddress;
+    const QString host = url.host().toLower();
+    const bool localHost = host == QLatin1String("localhost")
+        || host.endsWith(QStringLiteral(".localhost"))
+        || host.endsWith(QStringLiteral(".local"))
+        || hostAddress.setAddress(host);
+    if (url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) != 0
+        || url.path().endsWith(QStringLiteral(".wsz"), Qt::CaseInsensitive) == false
+        || url.userInfo().size() != 0 || (url.port(-1) != -1 && url.port(-1) != 443)
+        || host.isEmpty() || localHost) {
+        QMessageBox::warning(this, tr("Skin non valida"),
+                             tr("Il link deve puntare a un file .wsz HTTPS pubblico."));
+        return;
+    }
+
+    auto *network = new QNetworkAccessManager(this);
+    QNetworkRequest request(url);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::SameOriginRedirectPolicy);
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Linkamp skin installer"));
+    QNetworkReply *reply = network->get(request);
+    const QString downloadedFileName = QFileInfo(requestedFileName).fileName();
+    auto *timeout = new QTimer(reply);
+    timeout->setSingleShot(true);
+    timeout->start(30000);
+    connect(timeout, &QTimer::timeout, reply, &QNetworkReply::abort);
+    connect(reply, &QNetworkReply::downloadProgress, reply,
+            [reply](qint64 received, qint64 total) {
+        constexpr qint64 maxSkinBytes = 64LL * 1024 * 1024;
+        if (received > maxSkinBytes || total > maxSkinBytes)
+            reply->abort();
+    });
+    connect(reply, &QNetworkReply::finished, this, [this, reply, network, timeout,
+                                                     downloadedFileName, url] {
+        timeout->stop();
+        const QByteArray archiveData = reply->readAll();
+        const QNetworkReply::NetworkError networkError = reply->error();
+        const QString networkErrorText = reply->errorString();
+        reply->deleteLater();
+        network->deleteLater();
+        if (networkError != QNetworkReply::NoError || archiveData.isEmpty()
+            || archiveData.size() > 64 * 1024 * 1024) {
+            QMessageBox::warning(this, tr("Download skin non riuscito"),
+                                 networkError == QNetworkReply::NoError
+                                     ? tr("Il file skin è vuoto o supera 64 MB.")
+                                     : networkErrorText);
+            return;
+        }
+
+        QString fileName = downloadedFileName;
+        if (fileName.isEmpty() || !fileName.endsWith(QStringLiteral(".wsz"), Qt::CaseInsensitive))
+            fileName = QStringLiteral("%1.wsz").arg(QFileInfo(url.path()).completeBaseName());
+        fileName.replace(QLatin1Char('\\'), QLatin1Char('/'));
+        fileName = QFileInfo(fileName).fileName();
+        for (qsizetype index = 0; index < fileName.size(); ++index) {
+            const QChar character = fileName.at(index);
+            if (!character.isLetterOrNumber() && character != QLatin1Char('.')
+                && character != QLatin1Char('_') && character != QLatin1Char('-')
+                && character != QLatin1Char(' '))
+                fileName[index] = QLatin1Char('_');
+        }
+        while (fileName.startsWith(QLatin1Char('.')))
+            fileName.remove(0, 1);
+        if (fileName.isEmpty() || !fileName.endsWith(QStringLiteral(".wsz"), Qt::CaseInsensitive))
+            fileName = QStringLiteral("%1.wsz").arg(QFileInfo(url.path()).completeBaseName());
+        const QString skinDirectory = QDir(QStandardPaths::writableLocation(
+            QStandardPaths::AppDataLocation)).filePath(QStringLiteral("skins"));
+        if (!QDir().mkpath(skinDirectory)) {
+            QMessageBox::warning(this, tr("Installazione skin non riuscita"),
+                                 tr("Non riesco a creare la cartella delle skin."));
+            return;
+        }
+        const QString skinPath = QDir(skinDirectory).filePath(fileName);
+        const QString stagingPath = skinPath + QStringLiteral(".download");
+        QSaveFile stagingFile(stagingPath);
+        if (!stagingFile.open(QIODevice::WriteOnly)
+            || stagingFile.write(archiveData) != archiveData.size()
+            || !stagingFile.commit()) {
+            stagingFile.cancelWriting();
+            QMessageBox::warning(this, tr("Installazione skin non riuscita"),
+                                 tr("Non riesco a salvare il file skin."));
+            return;
+        }
+
+        QString skinError;
+        if (!WinampSkin::instance().load(stagingPath, &skinError)) {
+            QFile::remove(stagingPath);
+            QMessageBox::warning(this, tr("Skin non caricata"), skinError);
+            return;
+        }
+        QSaveFile installedFile(skinPath);
+        if (!installedFile.open(QIODevice::WriteOnly)
+            || installedFile.write(archiveData) != archiveData.size()
+            || !installedFile.commit()) {
+            installedFile.cancelWriting();
+            QMessageBox::warning(this, tr("Installazione skin incompleta"),
+                                 tr("La skin è stata caricata, ma non riesco a installarla nella cartella delle skin."));
+            return;
+        }
+        if (!WinampSkin::instance().load(skinPath, &skinError)) {
+            QFile::remove(stagingPath);
+            QMessageBox::warning(this, tr("Skin non caricata"), skinError);
+            return;
+        }
+        QFile::remove(stagingPath);
+        refreshAttachedWindowPositions();
+        QMessageBox::information(this, tr("Skin installata"),
+                                 tr("La skin %1 è stata installata e applicata.").arg(fileName));
     });
 }

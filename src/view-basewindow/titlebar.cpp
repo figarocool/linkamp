@@ -163,14 +163,19 @@ void TitleBar::paintEvent(QPaintEvent *event)
                 if (!linkampMark.isNull()) {
                     painter.save();
                     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-                    painter.drawPixmap(QRect(14, 2, 8, 8), linkampMark);
+                    // Clear only the lightning slot. The gold rail starts at
+                    // x=20 in the skin and must remain untouched.
+                    painter.fillRect(QRect(6, 2, 14, 10), QColor(24, 24, 41));
+                    // Match the original lightning's visible 9x7 px footprint.
+                    painter.drawPixmap(QRect(5, 3, 11, 9), linkampMark);
                     painter.restore();
                 }
             }
 
-            // Keep the original Winamp titlebar artwork while using Linkamp's
-            // name in the logo slot baked into the classic sprite.
-            if (!m_title.isEmpty()) {
+            // The built-in Classic uses Linkamp branding in Winamp's title
+            // slot. Loaded Winamp skins own this artwork and must keep their
+            // original title/logo unobstructed.
+            if (!WinampSkin::instance().isLoaded() && !m_title.isEmpty()) {
                 painter.save();
                 painter.scale(width() / 275.0, height() / 14.0);
                 painter.fillRect(QRect(111, 4, 53, 7), QColor(24, 24, 41));
@@ -205,6 +210,14 @@ void TitleBar::paintEvent(QPaintEvent *event)
 
 void TitleBar::mousePressEvent(QMouseEvent *event)
 {
+    if (!m_classicEqualizerStyle && event->button() == Qt::LeftButton) {
+        const QRect closeHit(width() - 11 * UI_SCALE, 0, 11 * UI_SCALE, 14 * UI_SCALE);
+        m_pressedWindowClose = closeHit.contains(event->position().toPoint());
+        if (m_pressedWindowClose) {
+            event->accept();
+            return;
+        }
+    }
     if (m_classicEqualizerStyle && event->button() == Qt::LeftButton) {
         const QPoint position = event->position().toPoint();
         m_pressedEqualizerClose = position.x() >= 264 && position.y() <= 12;
@@ -235,6 +248,14 @@ void TitleBar::mouseMoveEvent(QMouseEvent *event)
 
 void TitleBar::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (m_pressedWindowClose && event->button() == Qt::LeftButton) {
+        const QRect closeHit(width() - 11 * UI_SCALE, 0, 11 * UI_SCALE, 14 * UI_SCALE);
+        m_pressedWindowClose = false;
+        if (closeHit.contains(event->position().toPoint()))
+            window()->close();
+        event->accept();
+        return;
+    }
     if (m_classicEqualizerStyle && event->button() == Qt::LeftButton) {
         const QPoint position = event->position().toPoint();
         const bool closePressed = std::exchange(m_pressedEqualizerClose, false);

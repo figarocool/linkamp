@@ -5,6 +5,9 @@ if(NOT LINKAMP_PROJECT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+")
 endif()
 project(Linkamp VERSION ${LINKAMP_PROJECT_VERSION} LANGUAGES C CXX)
 
+set(LINKAMP_GOOGLE_OAUTH_CLIENT_ID "664147116650-q985u1gm1eqg98raedhaq9htvrno320h.apps.googleusercontent.com" CACHE STRING "Google OAuth client ID for Linkamp")
+set(LINKAMP_ONEDRIVE_OAUTH_CLIENT_ID "" CACHE STRING "Microsoft Entra client ID for Linkamp")
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
@@ -89,6 +92,8 @@ qt_add_executable(player WIN32 MACOSX_BUNDLE
     src/view-basewindow/embeddedbasewindow.ui
     src/view-basewindow/mainwindow.cpp
     src/view-basewindow/mainwindow.h
+    src/view-basewindow/cloudplaylistsync.cpp
+    src/view-basewindow/cloudplaylistsync.h
     src/view-basewindow/titlebar.cpp
     src/view-basewindow/titlebar.h
     src/view-basewindow/titlebar.ui
@@ -206,6 +211,10 @@ if(WIN32)
 endif()
 
 target_compile_definitions(player PRIVATE LINKAMP_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(player PRIVATE
+    LINKAMP_GOOGLE_OAUTH_CLIENT_ID="${LINKAMP_GOOGLE_OAUTH_CLIENT_ID}"
+    LINKAMP_ONEDRIVE_OAUTH_CLIENT_ID="${LINKAMP_ONEDRIVE_OAUTH_CLIENT_ID}"
+)
 
 install(TARGETS player
     BUNDLE DESTINATION .

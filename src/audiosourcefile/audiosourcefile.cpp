@@ -174,7 +174,13 @@ void AudioSourceFile::handleSeek(int mseconds)
 
 void AudioSourceFile::handleMetaDataChanged()
 {
-    const QMediaMetaData metadata = currentMetaData();
+    QMediaMetaData metadata = currentMetaData();
+    if (!m_resolvedYouTubeMedia.isEmpty()) {
+        if (m_streamSampleRateHz > 0)
+            metadata.insert(QMediaMetaData::Comment, QString::number(m_streamSampleRateHz));
+        if (m_streamBitrateKbps > 0)
+            metadata.insert(QMediaMetaData::AudioBitRate, m_streamBitrateKbps * 1000);
+    }
     emit metadataChanged(metadata);
     const qint64 duration = metadata.value(QMediaMetaData::Duration).toLongLong();
     if (duration > 0)
@@ -243,7 +249,13 @@ void AudioSourceFile::setStatusInfo(const QString &info)
 
 void AudioSourceFile::handlePlaylistPositionChanged(int)
 {
+    // Clear the previous track's seek position immediately. Some backends do
+    // not report position 0 until after the new source starts buffering, so
+    // otherwise the seek thumb briefly remains offset from the beginning.
+    emit positionChanged(0);
     m_resolvedYouTubeMedia = QUrl();
+    m_streamSampleRateHz = 0;
+    m_streamBitrateKbps = 0;
     if (m_youtubeResolveProcess) {
         QProcess *previousProcess = m_youtubeResolveProcess;
         m_youtubeResolveProcess = nullptr;
@@ -290,12 +302,23 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
             }
 
             QString streamUrl;
+            int streamSampleRateHz = 0;
+            int streamBitrateKbps = 0;
             const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
             for (const QString &line : lines) {
                 const QString candidate = line.trimmed();
                 if (candidate.startsWith(QLatin1String("https://"))
                     || candidate.startsWith(QLatin1String("http://"))) {
                     streamUrl = candidate;
+                } else {
+                    bool ok = false;
+                    const double value = candidate.toDouble(&ok);
+                    if (!ok || value <= 0.0)
+                        continue;
+                    if (streamSampleRateHz == 0)
+                        streamSampleRateHz = qRound(value);
+                    else if (streamBitrateKbps == 0)
+                        streamBitrateKbps = qRound(value);
                 }
             }
             const QUrl resolvedUrl(streamUrl);
@@ -306,7 +329,18 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
 
             setStatusInfo(QString());
             m_resolvedYouTubeMedia = media;
+            m_streamSampleRateHz = streamSampleRateHz;
+            m_streamBitrateKbps = streamBitrateKbps;
+            QMediaMetaData streamMetadata = currentMetaData();
+            if (m_streamSampleRateHz > 0)
+                streamMetadata.insert(QMediaMetaData::Comment,
+                                      QString::number(m_streamSampleRateHz));
+            if (m_streamBitrateKbps > 0)
+                streamMetadata.insert(QMediaMetaData::AudioBitRate,
+                                      m_streamBitrateKbps * 1000);
+            emit metadataChanged(streamMetadata);
             m_player->setSource(resolvedUrl);
+            m_player->setPosition(0);
             if (shouldBePlaying) {
                 m_player->play();
                 startSpectrum();
@@ -323,13 +357,17 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
         process->start(ytDlp, {
             QStringLiteral("--no-playlist"), QStringLiteral("--no-warnings"),
             QStringLiteral("--quiet"), QStringLiteral("-f"),
-            QStringLiteral("bestaudio[ext=m4a]/bestaudio"), QStringLiteral("--get-url"),
+            QStringLiteral("bestaudio[ext=m4a]/bestaudio"),
+            QStringLiteral("--print"), QStringLiteral("%(asr)s"),
+            QStringLiteral("--print"), QStringLiteral("%(abr)s"),
+            QStringLiteral("--get-url"),
             QStringLiteral("--"), media.toString(QUrl::FullyEncoded)
         });
         return;
     }
 
     m_player->setSource(media);
+    m_player->setPosition(0);
 
     if (shouldBePlaying) {
         m_player->play();

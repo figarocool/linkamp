@@ -41,6 +41,7 @@ public slots:
     void setSpectrumData(const QByteArray& data, QAudioFormat format);
     void setMetadata(QMediaMetaData metadata);
     void setDuration(qint64 duration);
+    void refreshSkin();
     void setVolume(int volume);
     void setBalance(int balance);
     void setEqEnabled(bool enabled);
@@ -79,14 +80,17 @@ private:
     Ui::PlayerView *ui;
     void scale();
     void updatePositionSliderStyle();
+    void updatePlaybackStatusIcon();
     SpectrumWidget *spectrum = nullptr;
     QTimer *messageTimer = nullptr;
+    QTimer m_pauseBlinkTimer;
     ControlButtonsWidget *controlButtons = nullptr;
 
     QString m_trackInfo;
     QString m_statusInfo;
     qint64 m_duration = 0;
     qint64 m_currentPositionSeconds = 0;
+    int m_audioSampleRateHz = 44100;
 
     bool plEnabled = false;
     bool eqEnabled = false;
@@ -95,13 +99,15 @@ private:
     bool m_isUserSeeking = false;
     bool m_deferredSeekEnabled = false;
     bool m_monoPlayback = false;
-    bool m_timeLeftMode = true;
+    bool m_timeLeftMode = false;
+    bool m_pauseTimeVisible = true;
     MediaPlayer::PlaybackState m_playbackState = MediaPlayer::StoppedState;
 
     void updateDurationInfo(qint64 currentInfo);
     void setChannelIndicators(bool mono = false, bool active = true);
     QLabel *m_monoIndicator = nullptr;
     QLabel *m_stereoIndicator = nullptr;
+    QWidget *m_pauseDash = nullptr;
     void setTrackInfo(const QString &info);
 
 private slots:

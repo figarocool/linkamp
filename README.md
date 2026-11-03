@@ -15,7 +15,8 @@ Maintainer: Stefano Basile <stefanobasile@usa.com>.
 - Riproduce file audio locali e streaming audio da link YouTube, mantenendo una playlist persistente.
 - Offre un'interfaccia compatta ispirata a Winamp 2 Classic, con supporto alle skin classiche `.wsz`.
 - Include equalizzatore, visualizzatore audio, sorgenti Bluetooth e Spotify, e riproduzione CD nativa su Linux.
-- Le estensioni Chrome/Chromium e Firefox aggiungono il video YouTube corrente alla playlist di Linkamp tramite `linkamp://` e impediscono l'autoplay iniziale.
+- Le estensioni Chrome/Chromium e Firefox aggiungono il video YouTube corrente alla playlist tramite `linkamp://` e impediscono l'autoplay iniziale; sulle pagine HTTPS rilevano anche gli indirizzi e i link `.wsz` per installare e applicare direttamente le skin.
+- Dal menu contestuale del player si può collegare la playlist a Google Drive o OneDrive con l'accesso nel browser. Linkamp salva la playlist nella cartella privata dell'app nel cloud e controlla gli aggiornamenti ogni 15 secondi, senza richiedere i client desktop o cartelle montate. Google richiede l'OAuth Client ID e il client secret dell'app; il secret si configura tramite `LINKAMP_GOOGLE_OAUTH_CLIENT_SECRET` o le impostazioni utente e non va salvato nel repository. I percorsi dei file musicali locali devono esistere anche sull'altro computer, mentre i link YouTube vengono condivisi direttamente.
 
 Le estensioni Firefox pubblicate come `.xpi` in questo progetto non sono firmate da Mozilla: il caricamento è temporaneo da `about:debugging`. Per l'installazione permanente occorre la firma Mozilla Add-ons. L'estensione Chrome/Chromium si carica come pacchetto non pubblicato dalla pagina `chrome://extensions/` in modalità sviluppatore.
 
@@ -91,7 +92,7 @@ make
 
 ### Winamp Classic skins
 
-Linkamp can load Winamp 2.x Classic skins packaged as `.wsz` (or ZIP) files, or from an extracted skin folder. Open the player menu and choose **Load Winamp classic skin…** or **Load extracted skin folder…**; use **Use Linkamp default skin** to restore the built-in appearance. Skin selection is saved between launches. Modern Winamp `.wal` skins are not supported.
+Linkamp can load Winamp 2.x Classic skins packaged as `.wsz` (or ZIP) files, or from an extracted skin folder. Open the player menu and use **Skins** to choose an installed skin, load a `.wsz` file or extracted folder, or restore **Classic (Linkamp default)**. The built-in Classic appearance is used on first launch, and the selected skin is saved between launches. Modern Winamp `.wal` skins are not supported.
 
 ## YouTube streaming (local desktop integration)
 
@@ -103,7 +104,7 @@ This local build accepts YouTube URLs from the command line or the playlist's **
 
 Linkamp legge il titolo e aggiunge l'URL della pagina alla playlist. `yt-dlp` risolve l'audio solo quando selezioni il brano, poi lo riproduce in streaming. L'audio viene bufferizzato per la riproduzione, senza salvare MP3 o altri file. Selezionare il brano successivo interrompe lo stream corrente. Le estensioni browser mettono in pausa l'autoplay di YouTube, lasciando disponibile il pulsante Play del sito.
 
-Le estensioni sono in [`chrome-extension/`](chrome-extension/README.md) per Chrome/Chromium e [`firefox-extension/`](firefox-extension/README.md) per Firefox. Entrambe aggiungono **♫ Linkamp** accanto a Mi piace e passano il link tramite lo schema Linux `linkamp://`.
+Le estensioni sono in [`chrome-extension/`](chrome-extension/README.md) per Chrome/Chromium e [`firefox-extension/`](firefox-extension/README.md) per Firefox. Entrambe aggiungono **♫ Linkamp** accanto a Mi piace e sulle pagine skin di Winamp Skin Museum, usando lo schema locale `linkamp://`.
 
 ### Building a Debian package
 
@@ -135,6 +136,10 @@ Le release forniscono build per Linux, Windows x64 e macOS (Intel e Apple Silico
 
 Linkamp is a compact Qt 6 music player inspired by Winamp 2 Classic. It plays local audio files and streams audio from YouTube links without saving audio files, and it keeps the playlist between launches. It also includes classic `.wsz` skin support, an equalizer, an audio visualizer, Bluetooth and Spotify sources, and native CD playback on Linux.
 
+From the player's context menu, connect a playlist to Google Drive or OneDrive through browser sign-in. Linkamp stores it in the app's private cloud folder and checks for updates every 15 seconds, without requiring desktop sync clients or mounted folders. Google requires the app's OAuth client ID and client secret; configure the secret with `LINKAMP_GOOGLE_OAUTH_CLIENT_SECRET` or in user settings, and never commit it to the repository. Local audio files must also be available on the other computer, while YouTube links are shared directly.
+
+To configure OAuth client IDs when building Linkamp, pass `-DLINKAMP_GOOGLE_OAUTH_CLIENT_ID=...` and `-DLINKAMP_ONEDRIVE_OAUTH_CLIENT_ID=...` to CMake. Register Linkamp as a desktop app with Google and a public desktop app with Microsoft Entra; the app uses the system browser and PKCE.
+
 ### Downloads and browser extensions
 
 - [Latest Linux packages and extension downloads](https://github.com/figarocool/linkamp/releases/latest)
@@ -146,7 +151,7 @@ Linkamp is a compact Qt 6 music player inspired by Winamp 2 Classic. It plays lo
 - [Chrome/Chromium source and installation guide](chrome-extension/README.md)
 - [Firefox source and installation guide](firefox-extension/README.md)
 
-The extensions add the open YouTube video to Linkamp through the `linkamp://` protocol and pause YouTube's initial autoplay. The Chrome/Chromium extension is sideloaded in developer mode. The Firefox XPI published here is unsigned and can only be loaded temporarily through `about:debugging`; permanent installation requires signing through Mozilla Add-ons.
+The extensions add the open YouTube video to Linkamp through the `linkamp://` protocol and pause YouTube's initial autoplay. On HTTPS pages they also detect `.wsz` URLs and links, offering one-click skin installation and application. The Chrome/Chromium extension is sideloaded in developer mode. The Firefox XPI published here is unsigned and can only be loaded temporarily through `about:debugging`; permanent installation requires signing through Mozilla Add-ons.
 
 ### Supported platforms
 

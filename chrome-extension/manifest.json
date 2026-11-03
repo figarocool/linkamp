@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Aggiungi a Linkamp",
-  "version": "1.0.6",
-  "description": "Aggiunge a Linkamp il video YouTube aperto, senza scaricare l'audio.",
+  "version": "1.0.8",
+  "description": "Aggiunge video YouTube a Linkamp e rileva file skin .wsz sui siti web.",
   "content_scripts": [
     {
       "matches": [
@@ -20,6 +20,11 @@
         "https://m.youtube.com/*"
       ],
       "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["skin-content.js"],
       "run_at": "document_idle"
     }
   ]

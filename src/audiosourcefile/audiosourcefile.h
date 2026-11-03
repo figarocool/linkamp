@@ -56,6 +56,8 @@ private:
 
     QString m_statusInfo;
     QUrl m_resolvedYouTubeMedia;
+    int m_streamSampleRateHz = 0;
+    int m_streamBitrateKbps = 0;
 
     bool shuffleEnabled = false;
     bool repeatEnabled = false;

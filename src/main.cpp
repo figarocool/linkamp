@@ -15,6 +15,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QLockFile>
@@ -95,8 +96,24 @@ static QString youtubeUrlArgument(const QString &argument)
     return isYouTubeUrl(url) ? url.toString(QUrl::FullyEncoded) : QString();
 }
 
+static QJsonObject skinInstallArgument(const QString &argument)
+{
+    const QUrl requestUrl(argument);
+    if (requestUrl.scheme().compare(QStringLiteral("linkamp"), Qt::CaseInsensitive) != 0
+        || requestUrl.host().compare(QStringLiteral("install-skin"), Qt::CaseInsensitive) != 0)
+        return {};
+
+    const QUrlQuery query(requestUrl);
+    const QUrl skinUrl(query.queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded));
+    const QString fileName = query.queryItemValue(QStringLiteral("name"), QUrl::FullyDecoded);
+    if (skinUrl.isEmpty() || fileName.isEmpty())
+        return {};
+    return {{QStringLiteral("url"), skinUrl.toString(QUrl::FullyEncoded)},
+            {QStringLiteral("name"), fileName}};
+}
+
 static bool sendUrlsToRunningInstance(const QString &serverName, const QStringList &urls,
-                                     int timeoutMs)
+                                     const QJsonArray &skins, int timeoutMs)
 {
     QLocalSocket existingInstance;
     existingInstance.connectToServer(serverName);
@@ -106,7 +123,8 @@ static bool sendUrlsToRunningInstance(const QString &serverName, const QStringLi
     QJsonArray jsonUrls;
     for (const QString &url : urls)
         jsonUrls.append(url);
-    const QByteArray message = QJsonDocument(QJsonObject{{QStringLiteral("urls"), jsonUrls}})
+    const QByteArray message = QJsonDocument(QJsonObject{
+        {QStringLiteral("urls"), jsonUrls}, {QStringLiteral("skins"), skins}})
                                    .toJson(QJsonDocument::Compact) + '\n';
     const bool sent = existingInstance.write(message) == message.size()
                       && existingInstance.waitForBytesWritten(1000);
@@ -141,20 +159,24 @@ int main(int argc, char *argv[])
     parser.process(app);
 
     QStringList requestedUrls;
+    QJsonArray requestedSkins;
     for (const QString &argument : parser.positionalArguments()) {
         const QString url = youtubeUrlArgument(argument);
         if (!url.isEmpty())
             requestedUrls.append(url);
+        const QJsonObject skin = skinInstallArgument(argument);
+        if (!skin.isEmpty())
+            requestedSkins.append(skin);
     }
 
     const QString serverName = appServerName();
-    if (sendUrlsToRunningInstance(serverName, requestedUrls, 350))
+    if (sendUrlsToRunningInstance(serverName, requestedUrls, requestedSkins, 350))
         return 0;
 
     QLockFile instanceLock(serverName + QStringLiteral(".lock"));
     instanceLock.setStaleLockTime(1000);
     if (!instanceLock.tryLock(2000)) {
-        if (sendUrlsToRunningInstance(serverName, requestedUrls, 1500))
+        if (sendUrlsToRunningInstance(serverName, requestedUrls, requestedSkins, 1500))
             return 0;
         qWarning() << "Another Linkamp instance is starting; request could not be forwarded";
         return 1;
@@ -190,11 +212,17 @@ int main(int argc, char *argv[])
                         continue;
 
                     const QJsonArray urls = message.object().value(QStringLiteral("urls")).toArray();
+                    const QJsonArray skins = message.object().value(QStringLiteral("skins")).toArray();
                     window.show();
                     window.raise();
                     window.activateWindow();
                     for (const QJsonValue &value : urls)
                         window.addYouTubeUrl(value.toString());
+                    for (const QJsonValue &value : skins) {
+                        const QJsonObject skin = value.toObject();
+                        window.installSkinFromUrl(QUrl(skin.value(QStringLiteral("url")).toString()),
+                                                  skin.value(QStringLiteral("name")).toString());
+                    }
                 }
             });
             QObject::connect(client, &QLocalSocket::disconnected, &app, [&, client]() {
@@ -210,6 +238,14 @@ int main(int argc, char *argv[])
     window.show();
     for (const QString &url : requestedUrls)
         QTimer::singleShot(0, &window, [&window, url]() { window.addYouTubeUrl(url); });
+    for (const QJsonValue &value : requestedSkins) {
+        const QJsonObject skin = value.toObject();
+        const QUrl url(skin.value(QStringLiteral("url")).toString());
+        const QString name = skin.value(QStringLiteral("name")).toString();
+        QTimer::singleShot(0, &window, [&window, url, name] {
+            window.installSkinFromUrl(url, name);
+        });
+    }
 
     return app.exec();
 }

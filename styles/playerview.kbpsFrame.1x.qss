@@ -2,7 +2,3 @@
         background-color: transparent;
         border: none;
 }
-
-#kbpsValueLabel {
-    font-size: 6pt;
-}

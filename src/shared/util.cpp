@@ -3,6 +3,7 @@
 #include "qfileinfo.h"
 
 #include <QRegularExpression>
+#include <QStringDecoder>
 #include <QUrlQuery>
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
@@ -54,6 +55,29 @@ QMediaMetaData parseMetaData(const QUrl &url)
     }
 
     return metadata;
+}
+
+static int mojibakeMarkerCount(const QString &text)
+{
+    return text.count(QChar(0x00c3)) + text.count(QChar(0x00c2))
+        + text.count(QStringLiteral("â€"));
+}
+
+QString repairUtf8Mojibake(QString text)
+{
+    for (int pass = 0; pass < 12; ++pass) {
+        const int currentMarkers = mojibakeMarkerCount(text);
+        if (currentMarkers == 0)
+            break;
+
+        const QByteArray bytes = text.toLatin1();
+        QStringDecoder decoder(QStringConverter::Utf8);
+        const QString candidate = decoder(bytes);
+        if (decoder.hasError() || mojibakeMarkerCount(candidate) >= currentMarkers)
+            break;
+        text = candidate;
+    }
+    return text;
 }
 
 QString formatDuration(qint64 ms)

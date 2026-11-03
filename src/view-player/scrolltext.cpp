@@ -1,5 +1,6 @@
 #include "scrolltext.h"
 #include "winampskin.h"
+#include "scale.h"
 #include <QPainter>
 #include <algorithm>
 
@@ -55,13 +56,33 @@ void ScrollText::updateText()
 
 void ScrollText::renderBitmapText(QPainter &p, const QString &text, int startX, int startY)
 {
-    const QPixmap fontBmp = QPixmap::fromImage(
-        WinampSkin::instance().sheet(QStringLiteral("text")));
+    QImage fontImage = WinampSkin::instance().sheet(QStringLiteral("text"));
+    // Winamp TEXT.BMP files are commonly 24-bit bitmaps with no alpha channel.
+    // Their top-left pixel is the color key; drawing the bitmap directly paints
+    // opaque rectangles behind every ticker glyph (especially visible in skins
+    // such as Tiger Brushed).
+    if (!fontImage.isNull() && !fontImage.hasAlphaChannel()) {
+        fontImage = fontImage.convertToFormat(QImage::Format_ARGB32);
+        const QRgb colorKey = fontImage.pixel(0, 0) & 0x00ffffff;
+        for (int y = 0; y < fontImage.height(); ++y) {
+            QRgb *line = reinterpret_cast<QRgb *>(fontImage.scanLine(y));
+            for (int x = 0; x < fontImage.width(); ++x) {
+                if ((line[x] & 0x00ffffff) == colorKey)
+                    line[x] = 0x00000000;
+            }
+        }
+    }
+    const QPixmap fontBmp = QPixmap::fromImage(fontImage);
     if (fontBmp.isNull()) return;
 
     int curX = startX;
-    for (int i = 0; i < text.length(); ++i) {
-        const QChar ch = text[i];
+    const QString normalizedText = text.normalized(QString::NormalizationForm_D);
+    for (int i = 0; i < normalizedText.length(); ++i) {
+        const QChar ch = normalizedText[i];
+        if (ch.category() == QChar::Mark_NonSpacing
+            || ch.category() == QChar::Mark_SpacingCombining
+            || ch.category() == QChar::Mark_Enclosing)
+            continue;
         int col = -1;
         int row = -1;
 
@@ -135,6 +156,25 @@ void ScrollText::paintEvent(QPaintEvent*)
     QPainter p(this);
     p.save();
     p.setClipRect(rect());
+
+    // The ticker sits over the main skin bitmap. Restore its exact patch
+    // before drawing text so transparent font pixels reveal the skin cleanly.
+    QWidget *playerView = parentWidget();
+    while (playerView && playerView->objectName() != QLatin1String("PlayerView"))
+        playerView = playerView->parentWidget();
+    const QImage mainSheet = WinampSkin::instance().sheet(QStringLiteral("main"));
+    if (playerView && !mainSheet.isNull()) {
+        // PlayerView starts immediately below Winamp's 14 px title bar; the
+        // main skin bitmap includes that title bar, plus one pixel of bevel.
+        const QPoint origin = mapTo(playerView, QPoint(0, 0))
+            + QPoint(0, 15 * UI_SCALE);
+        const QRect sourceRect(origin, size());
+        const QRect validSource = sourceRect.intersected(mainSheet.rect());
+        if (!validSource.isEmpty()) {
+            const QRect targetRect(validSource.topLeft() - origin, validSource.size());
+            p.drawImage(targetRect, mainSheet, validSource);
+        }
+    }
     const int y = std::max(0, (height() - 6) / 2);
 
     if (scrollEnabled) {

@@ -112,11 +112,16 @@ bool WinampSkin::load(const QString &filePath, QString *error)
     if (!loaded)
         return false;
 
+    // Keep the old image files alive until every widget stylesheet points at
+    // the newly generated skin assets. Deleting them before the refresh can
+    // leave Qt's stylesheet engine trying to resolve dead image URLs.
+    auto previousAssetDirectory = std::move(m_assetDirectory);
     m_sheets = std::move(sheets);
     m_filePath = QFileInfo(filePath).absoluteFilePath();
     buildAssets();
     QSettings().setValue(QStringLiteral("skin/classicWsz"), m_filePath);
     refreshWidgetStyles();
+    previousAssetDirectory.reset();
     return true;
 }
 
@@ -157,12 +162,13 @@ bool WinampSkin::loadDirectory(const QString &directoryPath, QHash<QString, QIma
 
 void WinampSkin::reset()
 {
+    auto previousAssetDirectory = std::move(m_assetDirectory);
     m_filePath.clear();
     m_sheets.clear();
     m_assetPaths.clear();
-    m_assetDirectory.reset();
     QSettings().remove(QStringLiteral("skin/classicWsz"));
     refreshWidgetStyles();
+    previousAssetDirectory.reset();
 }
 
 bool WinampSkin::loadArchive(const QString &filePath, QHash<QString, QImage> *sheets,
@@ -248,6 +254,7 @@ QImage WinampSkin::sheet(const QString &name) const
         {"titlebar", ":/assets/classic-titlebar.png"},
         {"classic-titlebar", ":/assets/classic-titlebar.png"},
         {"titlebar-atlas", ":/assets/classic-titlebar-atlas.png"},
+        {"playpaus", ":/assets/classic-playpaus.png"},
         {"pledit", ":/assets/classic-pledit.png"},
         {"classic-pledit", ":/assets/classic-pledit.png"},
         {"eqmain", ":/assets/classic-eqmain.png"},
@@ -361,12 +368,12 @@ void WinampSkin::refreshWidgetStyles()
     for (QWidget *widget : QApplication::allWidgets()) {
         const QByteArray propertyName("_linkampBaseStyleSheet");
         auto *slider = qobject_cast<LinkampSlider *>(widget);
-        if (slider && !slider->baseStyleSheet().isEmpty())
-            widget->setProperty(propertyName.constData(), slider->baseStyleSheet());
         if (!widget->property(propertyName.constData()).isValid())
             widget->setProperty(propertyName.constData(), widget->styleSheet());
         const QString base = widget->property(propertyName.constData()).toString();
-        widget->setStyleSheet(applyToStylesheet(base));
+        const QString themed = applyToStylesheet(base);
+        if (widget->styleSheet() != themed)
+            widget->setStyleSheet(themed);
         if (auto *label = qobject_cast<QLabel *>(widget)) {
             const QString objectName = label->objectName();
             if (objectName == QLatin1String("classicVisualModeLabels")) {
