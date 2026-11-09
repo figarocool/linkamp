@@ -48,6 +48,11 @@ void AudioSourceFile::setOutputVolume(int volume)
     m_player->setVolume(qBound(0, volume, 100) / 100.0f);
 }
 
+void AudioSourceFile::setVideoSink(QVideoSink *sink)
+{
+    m_player->setVideoSink(sink);
+}
+
 void AudioSourceFile::activate()
 {
     emit playbackStateChanged(m_player->playbackState());
@@ -301,7 +306,7 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
                 return;
             }
 
-            QString streamUrl;
+            QStringList streamUrls;
             int streamSampleRateHz = 0;
             int streamBitrateKbps = 0;
             const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
@@ -309,7 +314,7 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
                 const QString candidate = line.trimmed();
                 if (candidate.startsWith(QLatin1String("https://"))
                     || candidate.startsWith(QLatin1String("http://"))) {
-                    streamUrl = candidate;
+                    streamUrls.append(candidate);
                 } else {
                     bool ok = false;
                     const double value = candidate.toDouble(&ok);
@@ -321,8 +326,12 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
                         streamBitrateKbps = qRound(value);
                 }
             }
-            const QUrl resolvedUrl(streamUrl);
-            if (streamUrl.isEmpty() || !resolvedUrl.isValid()) {
+            const QString audioStreamStr = streamUrls.size() >= 2 ? streamUrls.at(1)
+                : (streamUrls.isEmpty() ? QString() : streamUrls.at(0));
+            const QString videoStreamStr = streamUrls.size() >= 2 ? streamUrls.at(0) : QString();
+            const QUrl resolvedUrl(audioStreamStr);
+            const QUrl resolvedVideoUrl(videoStreamStr);
+            if (audioStreamStr.isEmpty() || !resolvedUrl.isValid()) {
                 setStatusInfo(tr("YouTube non ha restituito uno stream audio"));
                 return;
             }
@@ -340,6 +349,8 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
                                       m_streamBitrateKbps * 1000);
             emit metadataChanged(streamMetadata);
             m_player->setSource(resolvedUrl);
+            if (resolvedVideoUrl.isValid() && !resolvedVideoUrl.isEmpty() && resolvedVideoUrl != resolvedUrl)
+                m_player->setVideoSource(resolvedVideoUrl);
             m_player->setPosition(0);
             if (shouldBePlaying) {
                 m_player->play();
@@ -357,7 +368,7 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
         process->start(ytDlp, {
             QStringLiteral("--no-playlist"), QStringLiteral("--no-warnings"),
             QStringLiteral("--quiet"), QStringLiteral("-f"),
-            QStringLiteral("bestaudio[ext=m4a]/bestaudio"),
+            QStringLiteral("bestvideo[height<=720][vcodec^=avc1][protocol^=http]+bestaudio[ext=m4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/bestaudio[ext=m4a]/bestaudio"),
             QStringLiteral("--print"), QStringLiteral("%(asr)s"),
             QStringLiteral("--print"), QStringLiteral("%(abr)s"),
             QStringLiteral("--get-url"),

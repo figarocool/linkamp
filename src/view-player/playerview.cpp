@@ -35,7 +35,7 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     scale();
     m_pauseDash = new QWidget(ui->visualizationBackground);
     m_pauseDash->setObjectName(QStringLiteral("pauseTimeDash"));
-    m_pauseDash->setGeometry(26 * UI_SCALE, 11 * UI_SCALE,
+    m_pauseDash->setGeometry(26 * UI_SCALE, 9 * UI_SCALE,
                              5 * UI_SCALE, UI_SCALE);
     m_pauseDash->setStyleSheet(QStringLiteral(
         "background-color: #00f800; border: none;"));
@@ -96,14 +96,17 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     const QImage titlebarAtlas = WinampSkin::instance().sheet(QStringLiteral("titlebar-atlas"));
     if (!titlebarAtlas.isNull())
         visualModeLabels->setPixmap(QPixmap::fromImage(titlebarAtlas.copy(304, 0, 8, 43)));
+    if (window())
+        window()->installEventFilter(this);
     // Winamp draws this titlebar.bmp strip at main-window coordinates
-    // (10, 22), size 8x43. PlayerView starts below the 14 px titlebar, so
-    // anchoring it to visualizationBackground shifted and clipped the letters.
+    // (10, 22), size 8x43. PlayerView is at (4, 14) in MainWindow.
     visualModeLabels->setGeometry(QRect(
-        QPoint(10 * UI_SCALE, 8 * UI_SCALE),
+        QPoint(6 * UI_SCALE, 8 * UI_SCALE),
         QSize(8 * UI_SCALE, 43 * UI_SCALE)));
     ui->monoLabel->hide();
     ui->stereoLabel->hide();
+    ui->kbpsFrame->hide();
+    ui->khzFrame->hide();
     m_monoIndicator = new QLabel(this);
     m_monoIndicator->setObjectName(QStringLiteral("classicMonoIndicator"));
     m_monoIndicator->setGeometry(208 * UI_SCALE, 26 * UI_SCALE, 27 * UI_SCALE, 12 * UI_SCALE);
@@ -113,6 +116,25 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     m_stereoIndicator->setGeometry(235 * UI_SCALE, 26 * UI_SCALE, 29 * UI_SCALE, 12 * UI_SCALE);
     m_stereoIndicator->setAttribute(Qt::WA_TransparentForMouseEvents);
     setChannelIndicators(false, false);
+
+    ui->kbpsValueLabel->setParent(this);
+    ui->khzValueLabel->setParent(this);
+    ui->kbpsValueLabel->setGeometry(107 * UI_SCALE, 28 * UI_SCALE, 15 * UI_SCALE, 6 * UI_SCALE);
+    ui->khzValueLabel->setGeometry(152 * UI_SCALE, 28 * UI_SCALE, 10 * UI_SCALE, 6 * UI_SCALE);
+    ui->kbpsValueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    ui->khzValueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    ui->kbpsValueLabel->setStyleSheet(QStringLiteral("background: transparent; padding: 0px; margin: 0px; border: none;"));
+    ui->khzValueLabel->setStyleSheet(QStringLiteral("background: transparent; padding: 0px; margin: 0px; border: none;"));
+    ui->kbpsValueLabel->raise();
+    ui->khzValueLabel->raise();
+
+    ui->posBarContainer->layout()->removeWidget(ui->posBar);
+    ui->posBar->setParent(this);
+    ui->posBar->setMinimumHeight(10 * UI_SCALE);
+    ui->posBar->setMaximumHeight(10 * UI_SCALE);
+    ui->posBar->setGeometry(12 * UI_SCALE, 57 * UI_SCALE,
+                            248 * UI_SCALE, 10 * UI_SCALE);
+    ui->posBar->raise();
     QFont tickerFont = ui->songInfoLabel->font();
     tickerFont.setFamily(QStringLiteral("DejaVu Sans Mono"));
     tickerFont.setPixelSize(6 * UI_SCALE);
@@ -220,8 +242,9 @@ PlayerView::PlayerView(QWidget *parent, ControlButtonsWidget *ctlBtns) :
     ui->balanceSlider->setValue(0);
     ui->playlistButton->setChecked(true);
     ui->eqButton->setChecked(false);
-    ui->kbpsValueLabel->setText("");
-    ui->khzValueLabel->setText("");
+    m_kbpsText.clear();
+    m_khzText.clear();
+    updateRateLabels();
     ui->inputLabel->hide();
     ui->kHzLabel->hide();
     // MAIN.BMP already contains the white "kbps" legend. Keep the label's
@@ -264,8 +287,8 @@ void PlayerView::scale()
 
     ui->posBarContainer->layout()->setContentsMargins(ui->posBarContainer->layout()->contentsMargins() * UI_SCALE);
 
-    ui->posBar->setMaximumHeight(16 * UI_SCALE);
-    ui->posBar->setMinimumHeight(16 * UI_SCALE);
+    ui->posBar->setMaximumHeight(10 * UI_SCALE);
+    ui->posBar->setMinimumHeight(10 * UI_SCALE);
     updatePositionSliderStyle();
 
     ui->infoContainer->setContentsMargins(ui->infoContainer->contentsMargins() * UI_SCALE);
@@ -286,17 +309,8 @@ void PlayerView::scale()
     ui->kbpsLabel->setMaximumHeight(ui->kbpsLabel->maximumHeight() * UI_SCALE);
     ui->kbpsLabel->setMinimumHeight(ui->kbpsLabel->minimumHeight() * UI_SCALE);
 
-    ui->kbpsFrame->setMinimumSize(ui->kbpsFrame->minimumSize() * UI_SCALE);
-    ui->kbpsFrame->setMaximumHeight(ui->kbpsFrame->maximumHeight() * UI_SCALE);
-    ui->kbpsFrame->layout()->setContentsMargins(ui->kbpsFrame->layout()->contentsMargins() * UI_SCALE);
-    ui->kbpsFrame->layout()->setSpacing(ui->kbpsFrame->layout()->spacing() * UI_SCALE);
-    ui->kbpsFrame->setStyleSheet(getStylesheet("playerview.kbpsFrame"));
-
-    ui->khzFrame->setMinimumSize(ui->khzFrame->minimumSize() * UI_SCALE);
-    ui->khzFrame->setMaximumHeight(ui->khzFrame->maximumHeight() * UI_SCALE);
-    ui->khzFrame->layout()->setContentsMargins(ui->khzFrame->layout()->contentsMargins() * UI_SCALE);
-    ui->khzFrame->layout()->setSpacing(ui->khzFrame->layout()->spacing() * UI_SCALE);
-    ui->khzFrame->setStyleSheet(getStylesheet("playerview.khzFrame"));
+    ui->kbpsValueLabel->setGeometry(107 * UI_SCALE, 28 * UI_SCALE, 15 * UI_SCALE, 6 * UI_SCALE);
+    ui->khzValueLabel->setGeometry(152 * UI_SCALE, 28 * UI_SCALE, 10 * UI_SCALE, 6 * UI_SCALE);
 
     ui->monoLabel->setMinimumHeight(ui->monoLabel->minimumHeight() * UI_SCALE);
     ui->stereoLabel->setMinimumHeight(ui->stereoLabel->minimumHeight() * UI_SCALE);
@@ -328,7 +342,9 @@ void PlayerView::scale()
 
     ui->visualizationFrame->setMaximumSize(ui->visualizationFrame->maximumSize() * UI_SCALE);
     ui->visualizationFrame->setMinimumSize(ui->visualizationFrame->minimumSize() * UI_SCALE);
-    ui->visualizationFrame->setStyleSheet(getStylesheet("playerview.visualizationFrame"));
+    ui->visualizationFrame->setContentsMargins(UI_SCALE, UI_SCALE, UI_SCALE, UI_SCALE);
+    ui->visualizationFrame->setStyleSheet(QStringLiteral("#visualizationFrame { background: transparent; border: none; }"));
+    ui->visualizationBackground->setStyleSheet(QStringLiteral("#visualizationBackground { background: transparent; border: none; border-image: none; }"));
 
     ui->playStatusIcon->setMaximumSize(ui->playStatusIcon->maximumSize() * UI_SCALE);
     ui->playStatusIcon->setMinimumSize(ui->playStatusIcon->minimumSize() * UI_SCALE);
@@ -337,12 +353,10 @@ void PlayerView::scale()
                                     psiGeo.y()*UI_SCALE,
                                     psiGeo.width(), psiGeo.height());
 
-    ui->progressTimeLabel->setGeometry(32*UI_SCALE, 4*UI_SCALE,
-                                       54*UI_SCALE, 20*UI_SCALE);
-    QFont ptlFont = ui->progressTimeLabel->font();
-    ptlFont.setWordSpacing(-2);
-    ui->progressTimeLabel->setFont(ptlFont);
-    ui->progressTimeLabel->ensurePolished();
+    ui->progressTimeLabel->setGeometry(36 * UI_SCALE, 3 * UI_SCALE,
+                                       51 * UI_SCALE, 13 * UI_SCALE);
+    ui->progressTimeLabel->setStyleSheet(QStringLiteral("background: transparent; border: none; padding: 0px; margin: 0px;"));
+    ui->progressTimeLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
 
     QRect scGeo = ui->spectrumContainer->geometry();
     ui->spectrumContainer->setGeometry(scGeo.x()*UI_SCALE,
@@ -364,6 +378,7 @@ void PlayerView::setDeferredSeekEnabled(bool enabled)
 void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
 {
     m_playbackState = state;
+    emit playbackStateChanged(state);
     if (state == MediaPlayer::PausedState) {
         m_pauseTimeVisible = true;
         ui->progressTimeLabel->setVisible(true);
@@ -382,6 +397,7 @@ void PlayerView::setPlaybackState(MediaPlayer::PlaybackState state)
     switch(state) {
     case MediaPlayer::StoppedState:
         if(spectrum) spectrum->stop();
+        ui->progressTimeLabel->setPixmap(QPixmap());
         ui->progressTimeLabel->setText("");
         break;
     case MediaPlayer::PlayingState:
@@ -428,12 +444,12 @@ void PlayerView::updatePlaybackStatusIcon()
         // through black pixels in PLAYPAUS.BMP. Preserve that with alpha.
         QImage image(11, 9, QImage::Format_ARGB32);
         image.fill(Qt::transparent);
-        auto copyMasked = [&sprite, &image](int sourceX, int targetX, int width) {
+        const QRgb bgKey = sprite.pixel(0, 0) & 0x00ffffff;
+        auto copyMasked = [&sprite, &image, bgKey](int sourceX, int targetX, int width) {
             for (int y = 0; y < 9; ++y) {
                 for (int x = 0; x < width; ++x) {
-                    const QColor color = sprite.pixelColor(sourceX + x, y);
-                    if (color.red() || color.green() || color.blue())
-                        image.setPixelColor(targetX + x, y, color);
+                    if ((sprite.pixel(sourceX + x, y) & 0x00ffffff) != bgKey)
+                        image.setPixelColor(targetX + x, y, sprite.pixelColor(sourceX + x, y));
                 }
             }
         };
@@ -452,9 +468,86 @@ void PlayerView::updatePlaybackStatusIcon()
     }
 }
 
+static QPixmap renderSkinBitmapText(const QString &text, int fieldChars)
+{
+    if (text.isEmpty() || fieldChars <= 0)
+        return QPixmap();
+
+    QImage fontImage = WinampSkin::instance().sheet(QStringLiteral("text"));
+    if (fontImage.isNull())
+        return QPixmap();
+
+    if (!fontImage.hasAlphaChannel()) {
+        fontImage = fontImage.convertToFormat(QImage::Format_ARGB32);
+        const QRgb colorKey = fontImage.pixel(0, 0) & 0x00ffffff;
+        for (int y = 0; y < fontImage.height(); ++y) {
+            QRgb *line = reinterpret_cast<QRgb *>(fontImage.scanLine(y));
+            for (int x = 0; x < fontImage.width(); ++x) {
+                if ((line[x] & 0x00ffffff) == colorKey)
+                    line[x] = 0x00000000;
+            }
+        }
+    }
+
+    QImage out(fieldChars * 5, 6, QImage::Format_ARGB32);
+    out.fill(Qt::transparent);
+    QPainter p(&out);
+    const QString padded = text.right(fieldChars).rightJustified(fieldChars, QLatin1Char(' '));
+    for (int i = 0; i < fieldChars; ++i) {
+        const QChar ch = padded[i];
+        int row = -1;
+        int col = -1;
+        if (ch >= QLatin1Char('0') && ch <= QLatin1Char('9')) {
+            row = 1;
+            col = ch.unicode() - '0';
+        } else if (ch >= QLatin1Char('A') && ch <= QLatin1Char('Z')) {
+            row = 0;
+            col = ch.unicode() - 'A';
+        } else if (ch >= QLatin1Char('a') && ch <= QLatin1Char('z')) {
+            row = 0;
+            col = ch.unicode() - 'a';
+        }
+        if (row >= 0 && col >= 0 && fontImage.rect().contains(QRect(col * 5, row * 6, 5, 6)))
+            p.drawImage(i * 5, 0, fontImage, col * 5, row * 6, 5, 6);
+    }
+    p.end();
+    if (UI_SCALE > 1)
+        out = out.scaled(out.size() * UI_SCALE, Qt::KeepAspectRatio, Qt::FastTransformation);
+    return QPixmap::fromImage(out);
+}
+
+void PlayerView::updateRateLabels()
+{
+    const QPixmap kbpsPix = renderSkinBitmapText(m_kbpsText, 3);
+    if (!kbpsPix.isNull() || m_kbpsText.isEmpty()) {
+        ui->kbpsValueLabel->setText(QString());
+        ui->kbpsValueLabel->setPixmap(kbpsPix);
+    } else {
+        ui->kbpsValueLabel->setPixmap(QPixmap());
+        ui->kbpsValueLabel->setText(m_kbpsText);
+    }
+
+    const QPixmap khzPix = renderSkinBitmapText(m_khzText, 2);
+    if (!khzPix.isNull() || m_khzText.isEmpty()) {
+        ui->khzValueLabel->setText(QString());
+        ui->khzValueLabel->setPixmap(khzPix);
+    } else {
+        ui->khzValueLabel->setPixmap(QPixmap());
+        ui->khzValueLabel->setText(m_khzText);
+    }
+
+    ui->kbpsValueLabel->show();
+    ui->khzValueLabel->show();
+    ui->kbpsValueLabel->raise();
+    ui->khzValueLabel->raise();
+    ui->kbpsValueLabel->update();
+    ui->khzValueLabel->update();
+}
+
 void PlayerView::updatePositionSliderStyle()
 {
-    QString stylesheet = getStylesheet(QStringLiteral("playerview.posBar"));
+    const QString base = getStylesheet(QStringLiteral("playerview.posBar"));
+    QString stylesheet = WinampSkin::instance().applyToStylesheet(base);
     if (m_playbackState == MediaPlayer::StoppedState) {
         stylesheet += QStringLiteral(
             "\nQSlider::handle:horizontal {"
@@ -462,6 +555,7 @@ void PlayerView::updatePositionSliderStyle()
             " border-image: none; background: transparent;"
             " margin: 0px; }\n");
     }
+    ui->posBar->setProperty("_linkampBaseStyleSheet", base);
     ui->posBar->setStyleSheet(stylesheet);
 }
 
@@ -489,12 +583,12 @@ void PlayerView::setPosition(qint64 progress)
 void PlayerView::setSpectrumData(const QByteArray& data, QAudioFormat format)
 {
     m_audioSampleRateHz = format.sampleRate();
-    if (m_audioSampleRateHz > 0 && ui->khzValueLabel->text().isEmpty()) {
-        ui->khzValueLabel->setText(QString::number(m_audioSampleRateHz / 1000));
-        ui->khzValueLabel->show();
-        ui->khzValueLabel->raise();
+    if (m_audioSampleRateHz > 0 && m_khzText.isEmpty()) {
+        m_khzText = QString::number(m_audioSampleRateHz / 1000);
+        updateRateLabels();
     }
     spectrum->setData(data, format);
+    emit audioDataAvailable(data, format);
 }
 
 void PlayerView::setMetadata(QMediaMetaData metadata)
@@ -528,11 +622,11 @@ void PlayerView::setMetadata(QMediaMetaData metadata)
     // not the stream bitrate and Winamp does not display that as a valid rate.
     if(bitrate >= 8000) {
         bitrate = bitrate/1000;
-        ui->kbpsValueLabel->setText(QString::number(bitrate));
+        m_kbpsText = QString::number(bitrate);
     } else if(codec.length()) {
-        ui->kbpsValueLabel->setText(codec);
+        m_kbpsText = codec;
     } else {
-        ui->kbpsValueLabel->setText("");
+        m_kbpsText.clear();
     }
 
     // Set kHz
@@ -541,16 +635,8 @@ void PlayerView::setMetadata(QMediaMetaData metadata)
     if ((!sampleRateOk || sampleRate <= 0) && m_audioSampleRateHz > 0)
         sampleRate = m_audioSampleRateHz;
     const int khz = sampleRate / 1000;
-    ui->khzValueLabel->setText(khz > 0 ? QString::number(khz) : "");
-    // Keep the values above the frame's themed background after a skin change.
-    // Some skins restyle/repaint the frames after their child labels, leaving
-    // the text present but visually buried until another full repaint.
-    ui->kbpsValueLabel->show();
-    ui->khzValueLabel->show();
-    ui->kbpsValueLabel->raise();
-    ui->khzValueLabel->raise();
-    ui->kbpsValueLabel->update();
-    ui->khzValueLabel->update();
+    m_khzText = khz > 0 ? QString::number(khz) : QString();
+    updateRateLabels();
 }
 
 void PlayerView::setChannelIndicators(bool mono, bool active)
@@ -587,6 +673,9 @@ void PlayerView::refreshSkin()
     ui->posBar->updateGeometry();
     ui->posBar->update();
     updatePlaybackStatusIcon();
+    setChannelIndicators(m_monoPlayback, m_playbackState != MediaPlayer::StoppedState);
+    updateRateLabels();
+    updateDurationInfo(m_currentPositionSeconds);
 }
 
 void PlayerView::setVolume(int volume)
@@ -654,6 +743,7 @@ void PlayerView::updateDurationInfo(qint64 currentInfo)
 {
     m_currentPositionSeconds = std::max<qint64>(0, currentInfo);
     if (m_playbackState == MediaPlayer::StoppedState) {
+        ui->progressTimeLabel->setPixmap(QPixmap());
         ui->progressTimeLabel->setText("");
         return;
     }
@@ -662,7 +752,52 @@ void PlayerView::updateDurationInfo(qint64 currentInfo)
         : m_currentPositionSeconds;
     const QString minutes = QString::number(seconds / 60).rightJustified(2, QLatin1Char('0'));
     const QString remainder = QString::number(seconds % 60).rightJustified(2, QLatin1Char('0'));
+
+    QImage numbersSheet = WinampSkin::instance().sheet(QStringLiteral("numbers"));
+    if (!numbersSheet.isNull() && numbersSheet.width() >= 90 && numbersSheet.height() >= 13) {
+        const QColor bgColor = numbersSheet.pixelColor(0, 0);
+        QColor dashColor = numbersSheet.pixelColor(22, 6);
+        int bestDist = -1;
+        for (int y = 0; y < 13; ++y) {
+            for (int x = 0; x < 90; ++x) {
+                const QColor c = numbersSheet.pixelColor(x, y);
+                const int dist = qAbs(c.red() - bgColor.red())
+                               + qAbs(c.green() - bgColor.green())
+                               + qAbs(c.blue() - bgColor.blue());
+                if (dist > bestDist) {
+                    bestDist = dist;
+                    dashColor = c;
+                }
+            }
+        }
+        if (dashColor.isValid() && bestDist > 0) {
+            m_pauseDash->setStyleSheet(
+                QStringLiteral("background-color: %1; border: none;").arg(dashColor.name()));
+        }
+        QImage out(51, 13, QImage::Format_ARGB32);
+        out.fill(Qt::transparent);
+        QPainter p(&out);
+        const int digits[4] = {
+            minutes[0].unicode() - '0',
+            minutes[1].unicode() - '0',
+            remainder[0].unicode() - '0',
+            remainder[1].unicode() - '0'
+        };
+        const int xOffsets[4] = {0, 12, 30, 42};
+        for (int i = 0; i < 4; ++i) {
+            const int d = std::clamp(digits[i], 0, 9);
+            p.drawImage(xOffsets[i], 0, numbersSheet, d * 9, 0, 9, 13);
+        }
+        p.end();
+        if (UI_SCALE > 1)
+            out = out.scaled(out.size() * UI_SCALE, Qt::KeepAspectRatio, Qt::FastTransformation);
+        ui->progressTimeLabel->setText(QString());
+        ui->progressTimeLabel->setPixmap(QPixmap::fromImage(out));
+        return;
+    }
+
     const QString tDisplayStr = minutes + QLatin1Char(':') + remainder;
+    ui->progressTimeLabel->setPixmap(QPixmap());
     ui->progressTimeLabel->setText(tDisplayStr);
 }
 
@@ -710,6 +845,18 @@ bool PlayerView::eventFilter(QObject *watched, QEvent *event)
                                         || m_timeLeftMode));
             updateDurationInfo(m_currentPositionSeconds);
             return true;
+        }
+    }
+    if (watched == window() && (event->type() == QEvent::ActivationChange
+                                || event->type() == QEvent::WindowActivate
+                                || event->type() == QEvent::WindowDeactivate)) {
+        if (auto *label = findChild<QLabel *>(QStringLiteral("classicVisualModeLabels"))) {
+            QImage atlas = WinampSkin::instance().sheet(QStringLiteral("titlebar"));
+            if (atlas.isNull() || atlas.width() < 320 || atlas.height() < 43)
+                atlas = WinampSkin::instance().sheet(QStringLiteral("titlebar-atlas"));
+            const int srcX = (window() && window()->isActiveWindow()) ? 304 : 312;
+            if (!atlas.isNull() && atlas.width() >= srcX + 8 && atlas.height() >= 43)
+                label->setPixmap(QPixmap::fromImage(atlas.copy(srcX, 0, 8, 43)));
         }
     }
     return QWidget::eventFilter(watched, event);

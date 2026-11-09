@@ -12,6 +12,7 @@
         <file alias="assets/prev.png">skin/prev.png</file>
         <file alias="assets/stop_p.png">skin/stop_p.png</file>
         <file alias="assets/stop.png">skin/stop.png</file>
+        <file alias="assets/posBar.png">skin/posBar.png</file>
         <file alias="assets/posHandle_p.png">skin/posHandle_p.png</file>
         <file alias="assets/posHandle.png">skin/posHandle.png</file>
         <file alias="assets/eq_off_p.png">skin/eq_off_p.png</file>
@@ -54,8 +55,12 @@
         <file alias="assets/scroll_handle_p.png">skin/scroll_handle_p.png</file>
         <file alias="assets/scroll_handle.png">skin/scroll_handle.png</file>
         <file alias="assets/windowClose.png">skin/classic-private/classic-close.png</file>
+        <file alias="assets/windowClose_p.png">skin/classic-private/classic-close_p.png</file>
         <file alias="assets/windowMaximize.png">skin/classic-private/classic-shade.png</file>
+        <file alias="assets/windowMaximize_p.png">skin/classic-private/classic-shade_p.png</file>
         <file alias="assets/windowMinimize.png">skin/classic-private/classic-minimize.png</file>
+        <file alias="assets/windowMinimize_p.png">skin/classic-private/classic-minimize_p.png</file>
+        <file alias="assets/classic-menu_p.png">skin/classic-private/classic-menu_p.png</file>
         <file>styles/controlbuttonswidget.shuffleButton.4x.qss</file>
         <file>styles/controlbuttonswidget.shuffleButton.1x.qss</file>
         <file>styles/controlbuttonswidget.shuffleButton.2x.qss</file>
@@ -135,8 +140,10 @@
         <file>assets/linkamp-mark.png</file>
         <file alias="assets/classic-menu.png">skin/classic-private/classic-menu.png</file>
         <file alias="assets/classic-text.png">skin/classic-private/classic-text.png</file>
+        <file alias="assets/classic-numbers.png">skin/classic-private/classic-numbers.png</file>
         <file alias="assets/classic-monoster.png">skin/classic-private/classic-monoster.png</file>
         <file alias="assets/classic-volume.png">skin/classic-private/classic-volume.png</file>
         <file alias="assets/classic-balance.png">skin/classic-private/classic-balance.png</file>
+        <file alias="assets/classic-gen.png">skin/classic-private/classic-gen.png</file>
     </qresource>
 </RCC>

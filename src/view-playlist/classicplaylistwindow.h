@@ -67,6 +67,7 @@ private:
     void removeSelectedRows();
     void reorderPlaylist(bool reverse);
     void updatePlaylist();
+    void handleCurrentIndexChanged(int index);
 };
 
 #endif // CLASSICPLAYLISTWINDOW_H

@@ -9,6 +9,7 @@
 #include "mediaplayer.h"
 
 class QProcess;
+class QVideoSink;
 
 class AudioSourceFile : public AudioSourceWSpectrumCapture
 {
@@ -16,6 +17,7 @@ class AudioSourceFile : public AudioSourceWSpectrumCapture
 public:
     explicit AudioSourceFile(QObject *parent = nullptr, PlaylistModel *playlistModel = nullptr);
     void setOutputVolume(int volume) override;
+    void setVideoSink(QVideoSink *sink);
 
 signals:
     void showPlaylistRequested();

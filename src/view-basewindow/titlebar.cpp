@@ -22,6 +22,16 @@ TitleBar::TitleBar(QWidget *parent) :
     ui->decorationL->hide();
     ui->decorationR->hide();
     ui->windowTitle->hide();
+    if (ui->horizontalLayout) {
+        ui->horizontalLayout->removeWidget(ui->menuButton);
+        ui->horizontalLayout->removeWidget(ui->minimizeButton);
+        ui->horizontalLayout->removeWidget(ui->shadeButton);
+        ui->horizontalLayout->removeWidget(ui->closeButton);
+    }
+    ui->menuButton->setGeometry(6 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
+    ui->minimizeButton->setGeometry(244 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
+    ui->shadeButton->setGeometry(254 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
+    ui->closeButton->setGeometry(264 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
     connect(ui->menuButton, &QPushButton::clicked, this, &TitleBar::menuClicked);
     connect(ui->shadeButton, &QPushButton::clicked, this, &TitleBar::shadeClicked);
     connect(ui->closeButton, &QPushButton::clicked, window(), &QWidget::close);
@@ -152,43 +162,6 @@ void TitleBar::paintEvent(QPaintEvent *event)
             QPainter painter(this);
             const int titleY = (window() && window()->isActiveWindow()) ? 0 : 14;
             painter.drawPixmap(rect(), sprite, QRect(0, titleY, 275, 14));
-            if (!WinampSkin::instance().isLoaded() && titleY != 0) {
-                // The bundled inactive titlebar atlas has a stray square in
-                // this otherwise plain rail. Reuse the adjacent rail pixels.
-                painter.drawPixmap(QRect(59, 0, 22, 14), sprite,
-                                   QRect(80, titleY, 22, 14));
-            }
-            if (!WinampSkin::instance().isLoaded()) {
-                const QPixmap linkampMark(QStringLiteral(":/assets/linkamp-mark.png"));
-                if (!linkampMark.isNull()) {
-                    painter.save();
-                    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-                    // Clear only the lightning slot. The gold rail starts at
-                    // x=20 in the skin and must remain untouched.
-                    painter.fillRect(QRect(6, 2, 14, 10), QColor(24, 24, 41));
-                    // Match the original lightning's visible 9x7 px footprint.
-                    painter.drawPixmap(QRect(5, 3, 11, 9), linkampMark);
-                    painter.restore();
-                }
-            }
-
-            // The built-in Classic uses Linkamp branding in Winamp's title
-            // slot. Loaded Winamp skins own this artwork and must keep their
-            // original title/logo unobstructed.
-            if (!WinampSkin::instance().isLoaded() && !m_title.isEmpty()) {
-                painter.save();
-                painter.scale(width() / 275.0, height() / 14.0);
-                painter.fillRect(QRect(111, 4, 53, 7), QColor(24, 24, 41));
-                painter.setRenderHint(QPainter::TextAntialiasing, false);
-                QFont titleFont(QStringLiteral("DejaVu Sans Mono"));
-                titleFont.setPixelSize(8);
-                titleFont.setBold(true);
-                titleFont.setStyleStrategy(QFont::NoAntialias);
-                painter.setFont(titleFont);
-                painter.setPen(QColor(192, 192, 192));
-                painter.drawText(QRect(111, 1, 53, 12), Qt::AlignCenter, m_title);
-                painter.restore();
-            }
             return;
         }
         QWidget::paintEvent(event);

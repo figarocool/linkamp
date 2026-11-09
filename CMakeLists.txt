@@ -78,6 +78,10 @@ qt_add_executable(player WIN32 MACOSX_BUNDLE
     src/view-player/scrolltext.h
     src/view-player/spectrumwidget.cpp
     src/view-player/spectrumwidget.h
+    src/view-player/milkdropwindow.cpp
+    src/view-player/milkdropwindow.h
+    src/view-player/videowindow.cpp
+    src/view-player/videowindow.h
     src/view-player/playerview.cpp
     src/view-player/playerview.h
     src/view-player/playerview.ui

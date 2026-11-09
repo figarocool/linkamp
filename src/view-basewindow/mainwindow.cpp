@@ -77,15 +77,6 @@ int windowBottomOnScreen(const QWidget *window)
 MainWindow::MainWindow(QWidget *parent)
      : QMainWindow{parent}
 {
-    const QString savedSkin = QSettings().value(QStringLiteral("skin/classicWsz")).toString();
-    if (!savedSkin.isEmpty()) {
-        QString skinError;
-        if (!WinampSkin::instance().load(savedSkin, &skinError)) {
-            QSettings().remove(QStringLiteral("skin/classicWsz"));
-            qWarning() << "Unable to restore Winamp skin:" << skinError;
-        }
-    }
-
     // Linux BT and Spotify integrations are provided by the embedded Python bridge.
 #ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     Py_Initialize();
@@ -255,6 +246,37 @@ MainWindow::MainWindow(QWidget *parent)
         finishAttachedWindowDrag(playlist);
     });
 
+    milkdrop = new MilkdropWindow(this);
+    if (milkdrop->property("savedWindowPosition").toBool()) {
+        m_lastMilkdropPosition = milkdrop->pos();
+        m_haveMilkdropPosition = true;
+    }
+    milkdrop->installEventFilter(this);
+    connect(player, &PlayerView::audioDataAvailable, milkdrop, &MilkdropWindow::setAudioData);
+    connect(player, &PlayerView::playbackStateChanged, milkdrop, &MilkdropWindow::setPlaybackState);
+    connect(milkdrop, &MilkdropWindow::moveStarted, this, [this](bool detach) {
+        beginAttachedWindowDrag(milkdrop, detach);
+    });
+    connect(milkdrop, &MilkdropWindow::moveFinished, this, [this] {
+        finishAttachedWindowDrag(milkdrop);
+    });
+
+    videoWindow = new VideoWindow(this);
+    if (videoWindow->property("savedWindowPosition").toBool()) {
+        m_lastVideoPosition = videoWindow->pos();
+        m_haveVideoPosition = true;
+    }
+    videoWindow->installEventFilter(this);
+    fileSource->setVideoSink(videoWindow->videoSink());
+    connect(player, &PlayerView::playbackStateChanged, videoWindow, &VideoWindow::setPlaybackState);
+    connect(player, &PlayerView::currentTrackTitleChanged, videoWindow, &VideoWindow::setCurrentTrackTitle);
+    connect(videoWindow, &VideoWindow::moveStarted, this, [this](bool detach) {
+        beginAttachedWindowDrag(videoWindow, detach);
+    });
+    connect(videoWindow, &VideoWindow::moveFinished, this, [this] {
+        finishAttachedWindowDrag(videoWindow);
+    });
+
     // Restore only after the playlist view has subscribed to insertion and
     // current-index changes, so a fast local M3U load is painted immediately.
     connect(m_playlist, &QMediaPlaylist::loadFailed, this, [this] {
@@ -317,6 +339,8 @@ MainWindow::MainWindow(QWidget *parent)
         m_playlistAttached = windowsAreAdjacent(m_mainPlayerWindow, playlist)
             || (m_equalizerAttached && windowsAreAdjacent(m_equalizerWindow, playlist));
     }
+    m_milkdropAttached = false;
+    m_videoAttached = false;
     m_equalizerWindow->setStyleSheet("QDialog { background: transparent; border: 0px; }");
     auto *equalizerWindowLayout = new QVBoxLayout(m_equalizerWindow);
     equalizerWindowLayout->setContentsMargins(0, 0, 0, 0);
@@ -384,8 +408,28 @@ MainWindow::MainWindow(QWidget *parent)
     QTimer::singleShot(50, this, [this] {
         if (playlist && !playlist->isVisible())
             showPlaylist();
+        if (milkdrop && QSettings().value(QStringLiteral("windows/milkdrop/visible"), true).toBool()
+            && !milkdrop->isVisible())
+            showMilkdrop();
+        if (videoWindow && QSettings().value(QStringLiteral("windows/video/visible"), false).toBool()
+            && !videoWindow->isVisible())
+            showVideoWindow();
     });
+    const QString savedSkin = QSettings().value(QStringLiteral("skin/classicWsz")).toString();
+    if (!savedSkin.isEmpty()) {
+        QString skinError;
+        if (!WinampSkin::instance().load(savedSkin, &skinError)) {
+            QSettings().remove(QStringLiteral("skin/classicWsz"));
+            qWarning() << "Unable to restore Winamp skin:" << skinError;
+        }
+    }
     WinampSkin::instance().refreshWidgetStyles();
+    if (player)
+        player->refreshSkin();
+    if (milkdrop)
+        milkdrop->refreshSkin();
+    if (videoWindow)
+        videoWindow->refreshSkin();
 }
 
 MainWindow::~MainWindow()
@@ -480,6 +524,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
         playlist->close();
     if (m_equalizerWindow)
         m_equalizerWindow->close();
+    if (milkdrop)
+        milkdrop->close();
+    if (videoWindow)
+        videoWindow->close();
     QMainWindow::closeEvent(event);
 }
 
@@ -489,6 +537,10 @@ void MainWindow::showPlayer()
         playlist->hide();
     if (m_equalizerWindow)
         m_equalizerWindow->hide();
+    if (milkdrop)
+        milkdrop->hide();
+    if (videoWindow)
+        videoWindow->hide();
     show();
     raise();
     activateWindow();
@@ -532,7 +584,17 @@ void MainWindow::showMenu()
     QAction *addYouTube = menu.addAction(tr("Add YouTube URL…"));
     menu.addSeparator();
     QAction *playlistAction = menu.addAction(tr("Playlist editor"));
+    playlistAction->setCheckable(true);
+    playlistAction->setChecked(playlist && playlist->isVisible());
     QAction *equalizerAction = menu.addAction(tr("Equalizer"));
+    equalizerAction->setCheckable(true);
+    equalizerAction->setChecked(m_equalizerWindow && m_equalizerWindow->isVisible());
+    QAction *milkdropAction = menu.addAction(tr("MilkDrop"));
+    milkdropAction->setCheckable(true);
+    milkdropAction->setChecked(milkdrop && milkdrop->isVisible());
+    QAction *videoAction = menu.addAction(tr("Video"));
+    videoAction->setCheckable(true);
+    videoAction->setChecked(videoWindow && videoWindow->isVisible());
     menu.addSeparator();
     QMenu *sharedPlaylistMenu = menu.addMenu(tr("Shared playlist"));
     QAction *googleDriveAction = sharedPlaylistMenu->addAction(tr("Connect Google Drive…"));
@@ -582,6 +644,10 @@ void MainWindow::showMenu()
         showPlaylist();
     else if (selected == equalizerAction)
         showEqualizer();
+    else if (selected == milkdropAction)
+        showMilkdrop();
+    else if (selected == videoAction)
+        showVideoWindow();
     else if (selected == googleDriveAction || selected == oneDriveAction) {
         QSettings().remove(QStringLiteral("playlist/cloudFile"));
         m_cloudPlaylistSync->publish(serializePlaylist());
@@ -676,6 +742,96 @@ void MainWindow::showEqualizer()
     m_equalizerWindow->activateWindow();
 }
 
+void MainWindow::showMilkdrop()
+{
+    if (!milkdrop)
+        return;
+    if (milkdrop->isVisible()) {
+        QSettings().setValue(QStringLiteral("windows/milkdrop/visible"), false);
+        milkdrop->hide();
+        return;
+    }
+    QSettings().setValue(QStringLiteral("windows/milkdrop/visible"), true);
+    const auto pickMilkdropAnchor = [this]() -> const QWidget * {
+        const QRect mainRect = m_mainPlayerWindow->frameGeometry();
+        const QWidget *anchor = m_mainPlayerWindow;
+        if (m_equalizerWindow && m_equalizerWindow->isVisible()
+            && qAbs(m_equalizerWindow->frameGeometry().left() - mainRect.left()) <= 16) {
+            anchor = m_equalizerWindow;
+        }
+        if (playlist && playlist->isVisible()
+            && qAbs(playlist->frameGeometry().left() - mainRect.left()) <= 16
+            && windowBottomOnScreen(playlist) + milkdrop->height() <= 1000) {
+            anchor = playlist;
+        }
+        return anchor;
+    };
+    if (!m_haveMilkdropPosition || m_lastMilkdropPosition.y() + milkdrop->height() > 1020) {
+        const QWidget *anchor = pickMilkdropAnchor();
+        m_syncingAttachedWindows = true;
+        milkdrop->resize(275, 203);
+        milkdrop->move(m_mainPlayerWindow->frameGeometry().left(),
+                       windowBottomOnScreen(anchor));
+        m_lastMilkdropPosition = milkdrop->pos();
+        m_haveMilkdropPosition = true;
+        m_syncingAttachedWindows = false;
+        m_milkdropAttached = false;
+    }
+    milkdrop->show();
+    milkdrop->raise();
+    milkdrop->activateWindow();
+}
+
+void MainWindow::showVideoWindow()
+{
+    if (!videoWindow)
+        return;
+    if (videoWindow->isVisible()) {
+        QSettings().setValue(QStringLiteral("windows/video/visible"), false);
+        videoWindow->hide();
+        return;
+    }
+    QSettings().setValue(QStringLiteral("windows/video/visible"), true);
+    const auto pickVideoAnchor = [this]() -> const QWidget * {
+        const QRect mainRect = m_mainPlayerWindow->frameGeometry();
+        const QWidget *anchor = m_mainPlayerWindow;
+        if (m_equalizerWindow && m_equalizerWindow->isVisible()
+            && qAbs(m_equalizerWindow->frameGeometry().left() - mainRect.left()) <= 16) {
+            anchor = m_equalizerWindow;
+        }
+        if (playlist && playlist->isVisible()
+            && qAbs(playlist->frameGeometry().left() - mainRect.left()) <= 16
+            && windowBottomOnScreen(playlist) + videoWindow->height() <= 1000) {
+            anchor = playlist;
+        }
+        if (milkdrop && milkdrop->isVisible() && !milkdrop->isFullScreenMode()
+            && qAbs(milkdrop->frameGeometry().left() - mainRect.left()) <= 16
+            && windowBottomOnScreen(milkdrop) + videoWindow->height() <= 1000) {
+            anchor = milkdrop;
+        }
+        return anchor;
+    };
+    if (!m_haveVideoPosition || m_lastVideoPosition.y() + videoWindow->height() > 1020) {
+        const QWidget *anchor = pickVideoAnchor();
+        m_syncingAttachedWindows = true;
+        videoWindow->resize(275, 203);
+        const int nextY = windowBottomOnScreen(anchor);
+        if (nextY + videoWindow->height() <= 1020) {
+            videoWindow->move(m_mainPlayerWindow->frameGeometry().left(), nextY);
+        } else {
+            videoWindow->move(m_mainPlayerWindow->frameGeometry().right() + 1,
+                              m_mainPlayerWindow->frameGeometry().top());
+        }
+        m_lastVideoPosition = videoWindow->pos();
+        m_haveVideoPosition = true;
+        m_syncingAttachedWindows = false;
+        m_videoAttached = false;
+    }
+    videoWindow->show();
+    videoWindow->raise();
+    videoWindow->activateWindow();
+}
+
 void MainWindow::showEvent(QShowEvent *event)
 {
     QMainWindow::showEvent(event);
@@ -742,18 +898,29 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     if (window != nullptr && event->type() == QEvent::Move
-        && (window == m_mainPlayerWindow || window == playlist || window == m_equalizerWindow)) {
+        && (window == m_mainPlayerWindow || window == playlist
+            || window == m_equalizerWindow
+            || (window == milkdrop && !milkdrop->isFullScreenMode())
+            || (window == videoWindow && !videoWindow->isFullScreenMode()))) {
         QPoint *lastPosition = window == m_mainPlayerWindow ? &m_lastMainPosition
-            : window == playlist ? &m_lastPlaylistPosition : &m_lastEqualizerPosition;
+            : window == playlist ? &m_lastPlaylistPosition
+            : window == m_equalizerWindow ? &m_lastEqualizerPosition
+            : window == milkdrop ? &m_lastMilkdropPosition : &m_lastVideoPosition;
         bool *hasPosition = window == m_mainPlayerWindow ? &m_haveMainPosition
-            : window == playlist ? &m_havePlaylistPosition : &m_haveEqualizerPosition;
+            : window == playlist ? &m_havePlaylistPosition
+            : window == m_equalizerWindow ? &m_haveEqualizerPosition
+            : window == milkdrop ? &m_haveMilkdropPosition : &m_haveVideoPosition;
         const QPoint current = window->pos();
         if (window->isVisible()) {
             const QString key = window == m_mainPlayerWindow
                 ? QStringLiteral("windows/main/position")
                 : window == m_equalizerWindow
                     ? QStringLiteral("windows/equalizer/position")
-                    : QStringLiteral("windows/playlist/position");
+                    : window == milkdrop
+                        ? QStringLiteral("windows/milkdrop/position")
+                        : window == videoWindow
+                            ? QStringLiteral("windows/video/position")
+                            : QStringLiteral("windows/playlist/position");
             QSettings().setValue(key, window->frameGeometry().topLeft());
         }
         if (m_syncingAttachedWindows || !*hasPosition) {
@@ -773,6 +940,8 @@ void MainWindow::moveAttachedWindows(QWidget *source, const QPoint &delta)
     if (m_syncingAttachedWindows || delta.isNull())
         return;
 
+    if (source == milkdrop || source == videoWindow)
+        return;
     if (source == playlist && !m_playlistAttached)
         return;
     if (source == m_equalizerWindow && !m_equalizerAttached)
@@ -803,6 +972,10 @@ void MainWindow::refreshAttachedWindowPositions()
     }
     if (player)
         player->refreshSkin();
+    if (milkdrop)
+        milkdrop->refreshSkin();
+    if (videoWindow)
+        videoWindow->refreshSkin();
 
     // A skin can change child size hints and the window manager then adjusts
     // top-level positions during polish. Reapply the established vertical
@@ -840,6 +1013,8 @@ void MainWindow::beginAttachedWindowDrag(QWidget *window, bool detach)
         if (detach) {
             m_playlistAttached = false;
             m_equalizerAttached = false;
+            m_milkdropAttached = false;
+            m_videoAttached = false;
         }
     } else if (window == playlist) {
         m_playlistForceDetach = detach;
@@ -849,6 +1024,14 @@ void MainWindow::beginAttachedWindowDrag(QWidget *window, bool detach)
         m_equalizerForceDetach = detach;
         if (detach)
             m_equalizerAttached = false;
+    } else if (window == milkdrop) {
+        m_milkdropForceDetach = detach;
+        if (detach)
+            m_milkdropAttached = false;
+    } else if (window == videoWindow) {
+        m_videoForceDetach = detach;
+        if (detach)
+            m_videoAttached = false;
     }
 }
 
@@ -877,6 +1060,16 @@ void MainWindow::finishAttachedWindowDrag(QWidget *window)
         m_equalizerForceDetach = false;
         if (!forced && !m_equalizerAttached)
             m_equalizerAttached = snapWindowToMain(m_equalizerWindow);
+        return;
+    }
+    if (window == milkdrop) {
+        m_milkdropForceDetach = false;
+        m_milkdropAttached = false;
+        return;
+    }
+    if (window == videoWindow) {
+        m_videoForceDetach = false;
+        m_videoAttached = false;
     }
 }
 
@@ -929,6 +1122,12 @@ bool MainWindow::snapWindowToMain(QWidget *window)
     } else if (window == m_equalizerWindow) {
         m_lastEqualizerPosition = m_equalizerWindow->pos();
         m_haveEqualizerPosition = true;
+    } else if (window == milkdrop) {
+        m_lastMilkdropPosition = milkdrop->pos();
+        m_haveMilkdropPosition = true;
+    } else if (window == videoWindow) {
+        m_lastVideoPosition = videoWindow->pos();
+        m_haveVideoPosition = true;
     }
     return true;
 }

@@ -52,6 +52,7 @@ QHash<QString, SpriteSlice> spriteAliases()
         {"next_p.png", {"cbuttons", QRect(92, 18, 22, 18)}},
         {"open.png", {"cbuttons", QRect(114, 0, 22, 16)}},
         {"open_p.png", {"cbuttons", QRect(114, 16, 22, 16)}},
+        {"posBar.png", {"posbar", QRect(0, 0, 248, 10)}},
         {"posHandle.png", {"posbar", QRect(248, 0, 29, 10)}},
         {"posHandle_p.png", {"posbar", QRect(278, 0, 29, 10)}},
         {"volumeHandle.png", {"volume", QRect(15, 422, 14, 11)}},
@@ -75,9 +76,13 @@ QHash<QString, SpriteSlice> spriteAliases()
         {"pl_on.png", {"shufrep", QRect(23, 73, 23, 12)}},
         {"pl_on_p.png", {"shufrep", QRect(69, 73, 23, 12)}},
         {"windowClose.png", {"titlebar", QRect(18, 0, 9, 9)}},
+        {"windowClose_p.png", {"titlebar", QRect(18, 9, 9, 9)}},
         {"windowMinimize.png", {"titlebar", QRect(9, 0, 9, 9)}},
+        {"windowMinimize_p.png", {"titlebar", QRect(9, 9, 9, 9)}},
         {"windowMaximize.png", {"titlebar", QRect(0, 18, 9, 9)}},
+        {"windowMaximize_p.png", {"titlebar", QRect(9, 18, 9, 9)}},
         {"classic-menu.png", {"titlebar", QRect(0, 0, 9, 9)}},
+        {"classic-menu_p.png", {"titlebar", QRect(0, 9, 9, 9)}},
         {"mono_active.png", {"monoster", QRect(29, 0, 27, 12)}},
         {"mono_inactive.png", {"monoster", QRect(29, 12, 27, 12)}},
         {"stereo_active.png", {"monoster", QRect(0, 0, 29, 12)}},
@@ -94,6 +99,62 @@ QString builtInSheetAlias(const QString &alias)
     if (alias == QLatin1String("classic-text.png")) return QStringLiteral("classic-text");
     return {};
 }
+void parsePleditText(const QByteArray &bytes, PlaylistSkinTheme *theme)
+{
+    if (!theme)
+        return;
+    const QString text = QString::fromLatin1(bytes);
+    const QStringList lines = text.split(QRegularExpression(QStringLiteral("[\r\n]+")),
+                                         Qt::SkipEmptyParts);
+    for (const QString &rawLine : lines) {
+        const QString line = rawLine.trimmed();
+        const int eq = line.indexOf(QLatin1Char('='));
+        if (eq <= 0)
+            continue;
+        const QString key = line.left(eq).trimmed().toLower();
+        QString val = line.mid(eq + 1).trimmed();
+        if (key == QLatin1String("font")) {
+            if (!val.isEmpty())
+                theme->fontFamily = val;
+            continue;
+        }
+        if (!val.startsWith(QLatin1Char('#')))
+            val.prepend(QLatin1Char('#'));
+        const QColor color(val);
+        if (!color.isValid())
+            continue;
+        if (key == QLatin1String("normal"))
+            theme->normalText = color;
+        else if (key == QLatin1String("current"))
+            theme->currentText = color;
+        else if (key == QLatin1String("normalbg"))
+            theme->normalBackground = color;
+        else if (key == QLatin1String("selectedbg"))
+            theme->selectedBackground = color;
+    }
+}
+
+void parseViscolorText(const QByteArray &bytes, QList<QColor> *colors)
+{
+    if (!colors)
+        return;
+    colors->clear();
+    const QString text = QString::fromLatin1(bytes);
+    const QStringList lines = text.split(QRegularExpression(QStringLiteral("[\r\n]+")),
+                                         Qt::SkipEmptyParts);
+    static const QRegularExpression rgbRe(QStringLiteral("^\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)"));
+    for (const QString &rawLine : lines) {
+        const auto match = rgbRe.match(rawLine);
+        if (!match.hasMatch())
+            continue;
+        const int r = std::clamp(match.captured(1).toInt(), 0, 255);
+        const int g = std::clamp(match.captured(2).toInt(), 0, 255);
+        const int b = std::clamp(match.captured(3).toInt(), 0, 255);
+        colors->append(QColor(r, g, b));
+        if (colors->size() >= 24)
+            break;
+    }
+}
 }
 
 WinampSkin &WinampSkin::instance()
@@ -105,10 +166,12 @@ WinampSkin &WinampSkin::instance()
 bool WinampSkin::load(const QString &filePath, QString *error)
 {
     QHash<QString, QImage> sheets;
+    PlaylistSkinTheme playlistTheme;
+    QList<QColor> visColors;
     const QFileInfo info(filePath);
     const bool loaded = info.isDir()
-        ? loadDirectory(filePath, &sheets, error)
-        : loadArchive(filePath, &sheets, error);
+        ? loadDirectory(filePath, &sheets, &playlistTheme, &visColors, error)
+        : loadArchive(filePath, &sheets, &playlistTheme, &visColors, error);
     if (!loaded)
         return false;
 
@@ -117,6 +180,8 @@ bool WinampSkin::load(const QString &filePath, QString *error)
     // leave Qt's stylesheet engine trying to resolve dead image URLs.
     auto previousAssetDirectory = std::move(m_assetDirectory);
     m_sheets = std::move(sheets);
+    m_playlistTheme = playlistTheme;
+    m_visColors = std::move(visColors);
     m_filePath = QFileInfo(filePath).absoluteFilePath();
     buildAssets();
     QSettings().setValue(QStringLiteral("skin/classicWsz"), m_filePath);
@@ -126,12 +191,13 @@ bool WinampSkin::load(const QString &filePath, QString *error)
 }
 
 bool WinampSkin::loadDirectory(const QString &directoryPath, QHash<QString, QImage> *sheets,
+                               PlaylistSkinTheme *playlistTheme, QList<QColor> *visColors,
                                QString *error) const
 {
     static const QSet<QString> supported = {
         "main.bmp", "titlebar.bmp", "cbuttons.bmp", "playpaus.bmp", "monoster.bmp",
         "posbar.bmp", "volume.bmp", "balance.bmp", "shufrep.bmp", "eqmain.bmp",
-        "pledit.bmp", "text.bmp", "numbers.bmp", "nums_ex.bmp"
+        "pledit.bmp", "gen.bmp", "text.bmp", "numbers.bmp", "nums_ex.bmp"
     };
     QHash<QString, QImage> loaded;
     qint64 totalBytes = 0;
@@ -140,6 +206,18 @@ bool WinampSkin::loadDirectory(const QString &directoryPath, QHash<QString, QIma
         const QString path = it.next();
         const QFileInfo info(path);
         const QString filename = normalizedName(info.fileName());
+        if (filename == QLatin1String("pledit.txt") && info.size() > 0 && info.size() <= 64 * 1024) {
+            QFile f(path);
+            if (f.open(QIODevice::ReadOnly))
+                parsePleditText(f.readAll(), playlistTheme);
+            continue;
+        }
+        if (filename == QLatin1String("viscolor.txt") && info.size() > 0 && info.size() <= 64 * 1024) {
+            QFile f(path);
+            if (f.open(QIODevice::ReadOnly))
+                parseViscolorText(f.readAll(), visColors);
+            continue;
+        }
         if (!supported.contains(filename) || info.size() <= 0 || info.size() > 16 * 1024 * 1024)
             continue;
         totalBytes += info.size();
@@ -166,12 +244,15 @@ void WinampSkin::reset()
     m_filePath.clear();
     m_sheets.clear();
     m_assetPaths.clear();
+    m_playlistTheme = PlaylistSkinTheme();
+    m_visColors.clear();
     QSettings().remove(QStringLiteral("skin/classicWsz"));
     refreshWidgetStyles();
     previousAssetDirectory.reset();
 }
 
 bool WinampSkin::loadArchive(const QString &filePath, QHash<QString, QImage> *sheets,
+                             PlaylistSkinTheme *playlistTheme, QList<QColor> *visColors,
                              QString *error) const
 {
     const QFileInfo info(filePath);
@@ -183,7 +264,8 @@ bool WinampSkin::loadArchive(const QString &filePath, QHash<QString, QImage> *sh
     static const QSet<QString> supported = {
         "main.bmp", "titlebar.bmp", "cbuttons.bmp", "playpaus.bmp", "monoster.bmp",
         "posbar.bmp", "volume.bmp", "balance.bmp", "shufrep.bmp", "eqmain.bmp",
-        "pledit.bmp", "text.bmp", "numbers.bmp", "nums_ex.bmp"
+        "pledit.bmp", "gen.bmp", "text.bmp", "numbers.bmp", "nums_ex.bmp",
+        "pledit.txt", "viscolor.txt"
     };
     struct archive *reader = archive_read_new();
     archive_read_support_filter_all(reader);
@@ -222,6 +304,14 @@ bool WinampSkin::loadArchive(const QString &filePath, QHash<QString, QImage> *sh
         if (count < 0 || entryBytes > 16 * 1024 * 1024 || totalBytes + entryBytes > 64 * 1024 * 1024)
             continue;
         totalBytes += entryBytes;
+        if (name == QLatin1String("pledit.txt")) {
+            parsePleditText(bytes, playlistTheme);
+            continue;
+        }
+        if (name == QLatin1String("viscolor.txt")) {
+            parseViscolorText(bytes, visColors);
+            continue;
+        }
         QImage image;
         if (image.loadFromData(bytes))
             loaded.insert(name.left(name.lastIndexOf(QLatin1Char('.'))), image);
@@ -245,6 +335,8 @@ bool WinampSkin::loadArchive(const QString &filePath, QHash<QString, QImage> *sh
 QImage WinampSkin::sheet(const QString &name) const
 {
     const QString key = normalizedName(name);
+    if (key == QLatin1String("numbers") && m_sheets.contains(QStringLiteral("nums_ex")))
+        return m_sheets.value(QStringLiteral("nums_ex"));
     if (m_sheets.contains(key))
         return m_sheets.value(key);
 
@@ -261,9 +353,13 @@ QImage WinampSkin::sheet(const QString &name) const
         {"classic-eqmain", ":/assets/classic-eqmain.png"},
         {"text", ":/assets/classic-text.png"},
         {"classic-text", ":/assets/classic-text.png"},
+        {"numbers", ":/assets/classic-numbers.png"},
+        {"classic-numbers", ":/assets/classic-numbers.png"},
         {"monoster", ":/assets/classic-monoster.png"},
         {"volume", ":/assets/classic-volume.png"},
-        {"balance", ":/assets/classic-balance.png"}
+        {"balance", ":/assets/classic-balance.png"},
+        {"gen", ":/assets/classic-gen.png"},
+        {"classic-gen", ":/assets/classic-gen.png"}
     };
     const QString resource = embeddedSheets.value(key);
     return resource.isEmpty() ? QImage() : QImage(resource);
@@ -281,7 +377,7 @@ QString WinampSkin::writeImage(const QString &name, const QImage &image)
     const QString path = m_assetDirectory->filePath(name);
     if (!image.save(path, "PNG"))
         return {};
-    m_assetPaths.insert(name, path);
+    m_assetPaths.insert(normalizedName(name), path);
     return path;
 }
 
@@ -314,8 +410,22 @@ void WinampSkin::buildAssets()
     const auto aliases = spriteAliases();
     for (auto it = aliases.cbegin(); it != aliases.cend(); ++it) {
         const QImage source = sheet(QString::fromLatin1(it.value().sheet));
-        if (!source.isNull() && source.rect().contains(it.value().rect))
-            writeImage(it.key(), source.copy(it.value().rect));
+        if (!source.isNull()) {
+            const QRect targetRect = it.value().rect;
+            const QRect clipped = targetRect.intersected(source.rect());
+            if (!clipped.isEmpty()) {
+                if (clipped.size() == targetRect.size()) {
+                    writeImage(it.key(), source.copy(clipped));
+                } else {
+                    QImage padded(targetRect.size(), QImage::Format_ARGB32);
+                    padded.fill(Qt::transparent);
+                    QPainter p(&padded);
+                    p.drawImage(clipped.topLeft() - targetRect.topLeft(), source, clipped);
+                    p.end();
+                    writeImage(it.key(), padded);
+                }
+            }
+        }
     }
     for (int position = 0; position < 28; ++position) {
         const QImage volume = sheet(QStringLiteral("volume"));
@@ -380,8 +490,12 @@ void WinampSkin::refreshWidgetStyles()
                 QImage atlas = sheet(QStringLiteral("titlebar"));
                 if (atlas.isNull() || atlas.width() < 312 || atlas.height() < 43)
                     atlas = sheet(QStringLiteral("titlebar-atlas"));
-                if (!atlas.isNull() && atlas.width() >= 312 && atlas.height() >= 43)
-                    label->setPixmap(QPixmap::fromImage(atlas.copy(304, 0, 8, 43)));
+                const int srcX = (label->window() && label->window()->isActiveWindow()
+                                  && atlas.width() >= 312)
+                    ? 304
+                    : (atlas.width() >= 320 ? 312 : 304);
+                if (!atlas.isNull() && atlas.width() >= srcX + 8 && atlas.height() >= 43)
+                    label->setPixmap(QPixmap::fromImage(atlas.copy(srcX, 0, 8, 43)));
             }
         }
         if (slider)

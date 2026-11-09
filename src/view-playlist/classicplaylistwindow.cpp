@@ -29,7 +29,7 @@ constexpr int kWindowWidth = 275;
 constexpr int kWindowHeight = 116;
 constexpr int kListTop = 21;
 constexpr int kListBottomInset = 38;
-constexpr int kRowHeight = 12;
+constexpr int kRowHeight = 13;
 
 static void renderBitmapTextPl(QPainter &p, const QString &text, int startX, int startY,
                                bool selected, bool current)
@@ -42,8 +42,19 @@ static void renderBitmapTextPl(QPainter &p, const QString &text, int startX, int
     static qint64 currentSourceCacheKey = 0;
     const QString skinPath = WinampSkin::instance().filePath();
     if (normalBmp.isNull() || cachedSkinPath != skinPath) {
-        normalBmp = QPixmap::fromImage(
-            WinampSkin::instance().sheet(QStringLiteral("text")));
+        QImage fontImage = WinampSkin::instance().sheet(QStringLiteral("text"));
+        if (!fontImage.isNull() && !fontImage.hasAlphaChannel()) {
+            fontImage = fontImage.convertToFormat(QImage::Format_ARGB32);
+            const QRgb colorKey = fontImage.pixel(0, 0) & 0x00ffffff;
+            for (int y = 0; y < fontImage.height(); ++y) {
+                QRgb *line = reinterpret_cast<QRgb *>(fontImage.scanLine(y));
+                for (int x = 0; x < fontImage.width(); ++x) {
+                    if ((line[x] & 0x00ffffff) == colorKey)
+                        line[x] = 0x00000000;
+                }
+            }
+        }
+        normalBmp = QPixmap::fromImage(fontImage);
         cachedSkinPath = skinPath;
         selectedSourceCacheKey = 0;
         currentSourceCacheKey = 0;
@@ -247,7 +258,10 @@ ClassicPlaylistWindow::ClassicPlaylistWindow(QMediaPlaylist *playlist, QWidget *
     connect(m_playlist, &QMediaPlaylist::mediaInserted, this, &ClassicPlaylistWindow::updatePlaylist);
     connect(m_playlist, &QMediaPlaylist::mediaRemoved, this, &ClassicPlaylistWindow::updatePlaylist);
     connect(m_playlist, &QMediaPlaylist::mediaChanged, this, &ClassicPlaylistWindow::updatePlaylist);
-    connect(m_playlist, &QMediaPlaylist::currentIndexChanged, this, &ClassicPlaylistWindow::updatePlaylist);
+    connect(m_playlist, &QMediaPlaylist::currentIndexChanged, this, &ClassicPlaylistWindow::handleCurrentIndexChanged);
+
+    if (m_playlist->currentIndex() >= 0 && m_playlist->currentIndex() < m_playlist->mediaCount())
+        m_selectedRows.insert(m_playlist->currentIndex());
 }
 
 void ClassicPlaylistWindow::setPosition(qint64 position)
@@ -336,7 +350,7 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
     blit(x, 0, 25, 20, 0, titleY, 25, 20);
     x += 25;
     if (tiles & 1) {
-        blit(x, 0, 12, 20, 127, titleY, 25, 20);
+        blit(x, 0, 12, 20, 127, titleY, 12, 20);
         x += 12;
     }
     tiles /= 2;
@@ -349,7 +363,7 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
     x += 100;
     tiles = (width() - 25 - 25 - 100) / 25;
     if (tiles & 1) {
-        blit(x, 0, 13, 20, 127, titleY, 25, 20);
+        blit(x, 0, 13, 20, 127, titleY, 13, 20);
         x += 13;
     }
     tiles /= 2;
@@ -359,16 +373,14 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
     }
     const int remainder = (width() - 25 - 25 - 100) % 25;
     if (remainder > 0) {
-        blit(x, 0, remainder, 20, 127, titleY, 25, 20);
+        blit(x, 0, remainder, 20, 127, titleY, remainder, 20);
         x += remainder;
     }
     blit(x, 0, 25, 20, 153, titleY, 25, 20);
     blit(width() - 11, 3, 9, 9, 167, 3, 9, 9);
     blit(width() - 20, 3, 9, 9, 158, 3, 9, 9);
-    if (WinampSkin::instance().isLoaded())
-        renderPlaylistTitle(painter, sprite, titleY, logoSlotX);
-    else if (titleY != 0)
-        renderBuiltinInactivePlaylistTitle(painter, sprite, logoSlotX);
+    Q_UNUSED(logoSlotX);
+    const PlaylistSkinTheme &plTheme = WinampSkin::instance().playlistTheme();
     const int trackHeight = height() - 20 - 38;
     int borderY = 20;
     while (borderY + 29 <= 20 + trackHeight) {
@@ -379,11 +391,11 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
     }
     const int borderRemainder = 20 + trackHeight - borderY;
     if (borderRemainder > 0) {
-        blit(0, borderY, 12, borderRemainder, 0, 42, 12, 29);
-        blit(width() - 20, borderY, 5, borderRemainder, 31, 42, 5, 29);
-        blit(width() - 7, borderY, 7, borderRemainder, 44, 42, 7, 29);
+        blit(0, borderY, 12, borderRemainder, 0, 42, 12, borderRemainder);
+        blit(width() - 20, borderY, 5, borderRemainder, 31, 42, 5, borderRemainder);
+        blit(width() - 7, borderY, 7, borderRemainder, 44, 42, 7, borderRemainder);
     }
-    painter.fillRect(QRect(12, 20, width() - 32, trackHeight), Qt::black);
+    painter.fillRect(QRect(12, 20, width() - 32, trackHeight), plTheme.normalBackground);
 
     const int bottomY = height() - 38;
     blit(0, bottomY, 125, 38, 0, 72, 125, 38);
@@ -399,7 +411,7 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
     }
     const int middleRemainder = middleWidth % 25;
     if (middleRemainder > 0) {
-        blit(bottomX, bottomY, middleRemainder, 38, 179, 0, 25, 38);
+        blit(bottomX, bottomY, middleRemainder, 38, 179, 0, middleRemainder, 38);
         bottomX += middleRemainder;
     }
     if (extraPanel) {
@@ -416,9 +428,9 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         ? 0 : (thumbTravel * m_firstVisibleRow) / maxFirstRow;
     for (int y = 0; y < trackHeight; y += 29) {
         const int height = std::min(29, trackHeight - y);
-        blit(width() - 15, 20 + y, 8, height, 36, 42, 8, 29);
+        blit(width() - 15, 20 + y, 8, height, 36, 42, 8, height);
     }
-    blit(width() - 15, 20 + thumbY, 8, thumbHeight, 52, 53, 9, 18);
+    blit(width() - 15, 20 + thumbY, 8, thumbHeight, m_draggingScrollbar ? 61 : 52, 53, 8, 18);
 
     const int end = std::min(m_playlist->mediaCount(), m_firstVisibleRow + visibleRows);
     // Keep the small playlist text neutral white on Linux. Subpixel font
@@ -432,9 +444,9 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         const bool selected = m_selectedRows.contains(row);
         const bool current = m_playlist->currentIndex() == row;
         if (selected || current) {
-            painter.fillRect(rowRect, QColor(0, 0, 198)); // Winamp's active playlist selection
+            painter.fillRect(rowRect, plTheme.selectedBackground);
         } else {
-            painter.fillRect(rowRect, QColor(0, 0, 0)); // Solid black background
+            painter.fillRect(rowRect, plTheme.normalBackground);
         }
 
         const QMediaMetaData metadata = m_playlist->mediaMetadata(row);
@@ -462,23 +474,23 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
         if (durationMs > 0)
             duration = formatDuration(durationMs);
 
-        const int durationWidth = duration.isEmpty() ? 0 : duration.length() * 5 + 4;
-        const int maxTextWidth = (width() - 32) - durationWidth - 4;
         // Winamp's playlist rows use a normal UI font; TEXT.BMP is reserved
         // for the small LCD readouts and drawing rows with it makes them look
         // like a tiny green terminal instead of the original playlist.
-        QFont rowFont(QStringLiteral("Arial"));
-        rowFont.setPointSize(8);
+        QFont rowFont(plTheme.fontFamily);
+        rowFont.setPixelSize(13);
         rowFont.setStyleStrategy(QFont::StyleStrategy(
             QFont::PreferAntialias | QFont::NoSubpixelAntialias));
         painter.setFont(rowFont);
-        painter.setPen(QColor(255, 255, 255));
+        painter.setPen(current ? plTheme.currentText : plTheme.normalText);
         const QFontMetrics metrics(rowFont);
-        const int textBaseline = y + (kRowHeight - metrics.height()) / 2
-                               + metrics.ascent();
+        const int durationWidth = duration.isEmpty() ? 0 : metrics.horizontalAdvance(duration) + 6;
+        const int maxTextWidth = (width() - 36) - durationWidth;
+        const int textBaseline = y + 11;
+        const QString elidedTitle = metrics.elidedText(fullTitle, Qt::ElideRight, maxTextWidth);
         painter.save();
         painter.setClipRect(QRect(14, y, maxTextWidth, kRowHeight));
-        painter.drawText(14, textBaseline, fullTitle);
+        painter.drawText(14, textBaseline, elidedTitle);
         painter.restore();
 
         if (!duration.isEmpty()) {
@@ -836,4 +848,18 @@ void ClassicPlaylistWindow::updatePlaylist()
     m_firstVisibleRow = std::clamp(m_firstVisibleRow, 0,
                                    std::max(0, m_playlist->mediaCount() - visibleRows));
     update();
+}
+
+void ClassicPlaylistWindow::handleCurrentIndexChanged(int index)
+{
+    m_selectedRows.clear();
+    if (index >= 0 && index < m_playlist->mediaCount()) {
+        m_selectedRows.insert(index);
+        const int visibleRows = std::max(1, (height() - kListBottomInset - kListTop) / kRowHeight);
+        if (index < m_firstVisibleRow)
+            m_firstVisibleRow = index;
+        else if (index >= m_firstVisibleRow + visibleRows)
+            m_firstVisibleRow = std::max(0, index - visibleRows + 1);
+    }
+    updatePlaylist();
 }

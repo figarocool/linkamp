@@ -54,6 +54,8 @@ public slots:
 
 signals:
     void currentTrackTitleChanged(const QString &title);
+    void audioDataAvailable(const QByteArray &data, QAudioFormat format);
+    void playbackStateChanged(MediaPlayer::PlaybackState state);
     void volumeChanged(int volume);
     void balanceChanged(int balance);
     void volumeDragStarted();
@@ -88,6 +90,8 @@ private:
 
     QString m_trackInfo;
     QString m_statusInfo;
+    QString m_kbpsText;
+    QString m_khzText;
     qint64 m_duration = 0;
     qint64 m_currentPositionSeconds = 0;
     int m_audioSampleRateHz = 44100;
@@ -104,6 +108,7 @@ private:
     MediaPlayer::PlaybackState m_playbackState = MediaPlayer::StoppedState;
 
     void updateDurationInfo(qint64 currentInfo);
+    void updateRateLabels();
     void setChannelIndicators(bool mono = false, bool active = true);
     QLabel *m_monoIndicator = nullptr;
     QLabel *m_stereoIndicator = nullptr;

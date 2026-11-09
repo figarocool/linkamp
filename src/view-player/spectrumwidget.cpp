@@ -3,6 +3,7 @@
 #include <QPainter>
 #include <QColor>
 #include "scale.h"
+#include "winampskin.h"
 
 #define VIS_DELAY 1 /* delay before falloff in frames */
 #define VIS_FALLOFF 4 /* falloff in pixels per frame */
@@ -132,17 +133,26 @@ const unsigned int BAR_SPACING = 1 * UI_SCALE;
 
 void SpectrumWidget::paintSpectrum (QPainter & p)
 {
+    const QList<QColor> &vis = WinampSkin::instance().visColors();
+    QLinearGradient skinGradient(QPointF(0, 0), QPointF(0, height()));
+    const bool useSkinColors = vis.size() >= 18;
+    if (useSkinColors) {
+        for (int i = 0; i < 16; ++i)
+            skinGradient.setColorAt(float(i) / 15.0f, vis[2 + i]);
+    }
+    const QBrush &brush = useSkinColors ? QBrush(skinGradient) : QBrush(*getSpecBarGradient());
     for (int i = 0; i < N_BANDS; i++) {
         // Bar measures 3px*3 wide, 1px*3 spacing
         int x = (BAR_W * i) + BAR_SPACING*i;
         p.fillRect(x + BAR_SPACING, height() - (m_bandValues[i] * height() / 40),
-                   BAR_W, (m_bandValues[i] * height() / 40), *getSpecBarGradient());
+                   BAR_W, (m_bandValues[i] * height() / 40), brush);
     }
 }
 
 void SpectrumWidget::paintPeaks (QPainter & p)
 {
-    const QColor color = QColor::fromRgb(191, 191, 191);
+    const QList<QColor> &vis = WinampSkin::instance().visColors();
+    const QColor color = vis.size() >= 24 ? vis[23] : QColor::fromRgb(191, 191, 191);
     for (int i = 0; i < N_BANDS; i++) {
         // Peak rectangle measures 3px*3 wide, 1px*3 high, 1px*3 spacing
         int x = (BAR_W * i) + BAR_SPACING*i;

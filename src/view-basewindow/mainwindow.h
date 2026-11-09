@@ -14,6 +14,8 @@
 #endif
 #include "controlbuttonswidget.h"
 #include "equalizerview.h"
+#include "milkdropwindow.h"
+#include "videowindow.h"
 #include "playerview.h"
 #include "classicplaylistwindow.h"
 #include "systemequalizer.h"
@@ -40,6 +42,8 @@ public:
     PlayerView *player;
     ControlButtonsWidget *controlButtons;
     ClassicPlaylistWindow *playlist;
+    MilkdropWindow *milkdrop = nullptr;
+    VideoWindow *videoWindow = nullptr;
     EqualizerView *equalizerView;
     SystemEqualizer *equalizer;
     AudioSourceCoordinator *coordinator;
@@ -55,6 +59,8 @@ public slots:
     void showPlaylist();
     void showMenu();
     void showEqualizer();
+    void showMilkdrop();
+    void showVideoWindow();
     void toggleWindowShade();
     void showShutdownModal();
     void open();
@@ -101,14 +107,22 @@ private:
     bool m_haveMainPosition = false;
     bool m_havePlaylistPosition = false;
     bool m_haveEqualizerPosition = false;
+    bool m_haveMilkdropPosition = false;
+    bool m_haveVideoPosition = false;
     bool m_playlistAttached = true;
     bool m_equalizerAttached = true;
+    bool m_milkdropAttached = false;
+    bool m_videoAttached = false;
     bool m_mainForceDetach = false;
     bool m_playlistForceDetach = false;
     bool m_equalizerForceDetach = false;
+    bool m_milkdropForceDetach = false;
+    bool m_videoForceDetach = false;
     QPoint m_lastMainPosition;
     QPoint m_lastPlaylistPosition;
     QPoint m_lastEqualizerPosition;
+    QPoint m_lastMilkdropPosition;
+    QPoint m_lastVideoPosition;
     QProcess *shutdownProcess = nullptr;
     void shutdown();
     void moveAttachedWindows(QWidget *source, const QPoint &delta);

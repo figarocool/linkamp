@@ -61,8 +61,5 @@ void DesktopBaseWindow::paintEvent(QPaintEvent *event)
     // The Linkamp mark has a lighter outline than Winamp's solid lightning,
     // so match the visible bolt's footprint rather than its old smaller slot.
     const QRect boltArea(250 * UI_SCALE, 91 * UI_SCALE, 16 * UI_SCALE, 16 * UI_SCALE);
-    // Copy the nearby empty panel texture over the bundled lightning, then
-    // place Linkamp's transparent mark in the same lower-right slot.
-    painter.drawPixmap(boltArea, mainSheet, QRect(234, 90, 16, 16));
     painter.drawPixmap(boltArea, linkampMark);
 }

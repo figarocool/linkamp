@@ -6,6 +6,7 @@
 #include <QMediaPlayer>
 #include <QMetaObject>
 #include <QTimer>
+#include <QVideoSink>
 
 class MediaPlayerBackend : public QObject
 {
@@ -20,14 +21,36 @@ public:
         m_player = new QMediaPlayer(this);
         m_player->setAudioOutput(m_audioOutput);
 
+        m_videoPlayer = new QMediaPlayer(this);
+
         m_positionTimer = new QTimer(this);
         m_positionTimer->setInterval(200);
         connect(m_positionTimer, &QTimer::timeout, this, [this]() {
-            emit positionChanged(m_player->position());
+            const qint64 pos = m_player->position();
+            emit positionChanged(pos);
+            if (m_hasSeparateVideo && m_player->playbackState() == QMediaPlayer::PlayingState) {
+                if (m_videoPlayer->playbackState() != QMediaPlayer::PlayingState
+                    && m_videoPlayer->mediaStatus() >= QMediaPlayer::LoadedMedia
+                    && m_videoPlayer->mediaStatus() != QMediaPlayer::EndOfMedia) {
+                    m_videoPlayer->play();
+                }
+                if (m_videoPlayer->playbackState() == QMediaPlayer::PlayingState
+                    && qAbs(m_videoPlayer->position() - pos) > 400) {
+                    m_videoPlayer->setPosition(pos);
+                }
+            }
         });
 
         connect(m_player, &QMediaPlayer::playbackStateChanged,
                 this, [this](QMediaPlayer::PlaybackState state) {
+                    if (m_hasSeparateVideo) {
+                        if (state == QMediaPlayer::PlayingState)
+                            m_videoPlayer->play();
+                        else if (state == QMediaPlayer::PausedState)
+                            m_videoPlayer->pause();
+                        else
+                            m_videoPlayer->stop();
+                    }
                     emit playbackStateChanged(static_cast<int>(state));
                 });
 
@@ -56,28 +79,74 @@ public slots:
     void play()
     {
         m_player->play();
+        if (m_hasSeparateVideo)
+            m_videoPlayer->play();
         m_positionTimer->start();
     }
 
     void pause()
     {
         m_player->pause();
+        if (m_hasSeparateVideo)
+            m_videoPlayer->pause();
         m_positionTimer->stop();
     }
 
     void stop()
     {
         m_player->stop();
+        if (m_hasSeparateVideo)
+            m_videoPlayer->stop();
         m_positionTimer->stop();
     }
 
     void setSource(const QUrl &source)
     {
+        m_hasSeparateVideo = false;
+        m_videoPlayer->stop();
+        m_videoPlayer->setSource(QUrl());
+        m_videoPlayer->setVideoSink(nullptr);
+        m_player->setVideoSink(m_videoSink);
         m_player->setSource(source);
+    }
+
+    void setVideoSource(const QUrl &videoSource)
+    {
+        if (videoSource.isValid() && !videoSource.isEmpty()) {
+            m_hasSeparateVideo = true;
+            m_player->setVideoSink(nullptr);
+            m_videoPlayer->setVideoSink(m_videoSink);
+            m_videoPlayer->setSource(videoSource);
+            if (m_player->playbackState() == QMediaPlayer::PlayingState) {
+                m_videoPlayer->setPosition(m_player->position());
+                m_videoPlayer->play();
+            }
+        } else {
+            m_hasSeparateVideo = false;
+            m_videoPlayer->stop();
+            m_videoPlayer->setSource(QUrl());
+            m_videoPlayer->setVideoSink(nullptr);
+            m_player->setVideoSink(m_videoSink);
+        }
+    }
+
+    void setVideoSink(QVideoSink *sink)
+    {
+        m_videoSink = sink;
+        if (m_hasSeparateVideo) {
+            m_player->setVideoSink(nullptr);
+            m_videoPlayer->setVideoSink(m_videoSink);
+        } else {
+            m_videoPlayer->setVideoSink(nullptr);
+            m_player->setVideoSink(m_videoSink);
+        }
     }
 
     void clearSource()
     {
+        m_hasSeparateVideo = false;
+        m_videoPlayer->stop();
+        m_videoPlayer->setSource(QUrl());
         m_player->setSource(QUrl());
         m_positionTimer->stop();
     }
@@ -85,6 +154,8 @@ public slots:
     void setPosition(qint64 position)
     {
         m_player->setPosition(position);
+        if (m_hasSeparateVideo)
+            m_videoPlayer->setPosition(position);
     }
 
     void setVolume(float volume)
@@ -104,7 +175,10 @@ signals:
 
 private:
     QMediaPlayer *m_player = nullptr;
+    QMediaPlayer *m_videoPlayer = nullptr;
     QAudioOutput *m_audioOutput = nullptr;
+    QVideoSink *m_videoSink = nullptr;
+    bool m_hasSeparateVideo = false;
     QTimer *m_positionTimer = nullptr;
 };
 
@@ -480,6 +554,16 @@ void MediaPlayer::setSource(const QUrl &source)
     m_hasSource = source.isValid() && !source.isEmpty();
     m_sourceUrl = source;
     m_backend->setSource(source);
+}
+
+void MediaPlayer::setVideoSource(const QUrl &videoSource)
+{
+    m_backend->setVideoSource(videoSource);
+}
+
+void MediaPlayer::setVideoSink(QVideoSink *sink)
+{
+    m_backend->setVideoSink(sink);
 }
 
 void MediaPlayer::clearSource()

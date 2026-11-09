@@ -96,7 +96,7 @@ QString formatDuration(qint64 ms)
 QStringList audioFileFilters()
 {
     QStringList filters;
-    filters << "*.mp3" << "*.flac" << "*.m4a" << "*.ogg" << "*.wma" << "*.wav" << "*.m3u";
+    filters << "*.mp3" << "*.flac" << "*.m4a" << "*.ogg" << "*.wma" << "*.wav" << "*.mp4" << "*.mkv" << "*.webm" << "*.m3u";
     return filters;
 }
 

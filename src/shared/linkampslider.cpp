@@ -25,30 +25,40 @@ void LinkampSlider::paintEvent(QPaintEvent *event)
         return;
     }
 
-    QSlider::paintEvent(event);
     const QImage sheet = skin.sheet(isVolume ? QStringLiteral("volume")
                                              : QStringLiteral("balance"));
-    if (sheet.isNull() || sheet.width() < 68 || sheet.height() < 433)
+    const int minWidth = isVolume ? 60 : 38;
+    if (sheet.isNull() || sheet.width() < minWidth || sheet.height() < 418) {
+        QSlider::paintEvent(event);
         return;
+    }
 
     const int trackWidth = isVolume ? 68 : 38;
     const int position = isVolume
         ? (27 * (sliderPosition() - minimum())) / std::max(1, maximum() - minimum())
         : (27 * std::abs(sliderPosition()))
               / std::max(1, std::max(std::abs(minimum()), std::abs(maximum())));
-    const QRect trackSource(isVolume ? 0 : 9,
-                            std::clamp(position, 0, 27) * 15,
-                            trackWidth, 13);
+    const QRect trackSource = QRect(isVolume ? 0 : 9,
+                                    std::clamp(position, 0, 27) * 15,
+                                    trackWidth, 13).intersected(sheet.rect());
     const int trackX = (width() - trackWidth) / 2;
     const int trackY = (height() - 13) / 2;
+    const int effectiveTrackWidth = trackSource.width() > 0 ? trackSource.width() : trackWidth;
     const int handleX = trackX + QStyle::sliderPositionFromValue(
-        minimum(), maximum(), sliderPosition(), std::max(0, trackWidth - 14), false);
-    const QRect handleSource(isSliderDown() ? 0 : 15, 422, 14, 11);
+        minimum(), maximum(), sliderPosition(), std::max(0, effectiveTrackWidth - 14), false);
+    const QRect handleSource = QRect(isSliderDown() ? 0 : 15, 422, 14, 11).intersected(sheet.rect());
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
-    painter.drawImage(QRect(trackX, trackY, trackWidth, 13), sheet, trackSource);
-    painter.drawImage(QRect(handleX, (height() - 11) / 2, 14, 11), sheet, handleSource);
+    if (!trackSource.isEmpty()) {
+        painter.drawImage(QRect(trackX, trackY, trackSource.width(), trackSource.height()),
+                          sheet, trackSource);
+    }
+    if (!handleSource.isEmpty()) {
+        painter.drawImage(QRect(handleX, (height() - 11) / 2,
+                                handleSource.width(), handleSource.height()),
+                          sheet, handleSource);
+    }
 }
 
 void LinkampSlider::setGradient(QColor from, QColor to, Qt::Orientation orientation)

@@ -55,7 +55,8 @@
       </property>
       <property name="toolTip"><string>Menu</string></property>
       <property name="styleSheet">
-       <string notr="true">QPushButton { border:0; background:transparent; border-image:url(:assets/classic-menu.png); }</string>
+       <string notr="true">#menuButton { border:0; background:transparent; border-image:none; }
+#menuButton:pressed { border-image:url(:assets/classic-menu_p.png); }</string>
       </property>
       <property name="text"><string/></property>
      </widget>
@@ -256,13 +257,14 @@
      <property name="styleSheet">
       <string notr="true">#minimizeButton {
 	background-color: transparent;
-	border-image: url(:assets/windowMinimize.png);
+	border-image: none;
 	background: none;
 	background-repeat: none;
+	border: 0;
 }
 
 #minimizeButton:pressed {
-	border-image: url(:assets/windowMinimize.png);
+	border-image: url(:assets/windowMinimize_p.png);
 }</string>
      </property>
      <property name="text">
@@ -280,7 +282,8 @@
       </property>
       <property name="toolTip"><string>Window shade</string></property>
       <property name="styleSheet">
-       <string notr="true">QPushButton { border:0; background:transparent; border-image:url(:assets/windowMaximize.png); }</string>
+       <string notr="true">#shadeButton { border:0; background:transparent; border-image:none; }
+#shadeButton:pressed { border-image:url(:assets/windowMaximize_p.png); }</string>
       </property>
       <property name="text"><string/></property>
      </widget>
@@ -302,13 +305,14 @@
      <property name="styleSheet">
       <string notr="true">#closeButton {
 	background-color: transparent;
-	border-image: url(:assets/windowClose.png);
+	border-image: none;
 	background: none;
 	background-repeat: none;
+	border: 0;
 }
 
 #closeButton:pressed {
-	border-image: url(:assets/windowClose.png);
+	border-image: url(:assets/windowClose_p.png);
 }</string>
      </property>
      <property name="text">

@@ -8,6 +8,7 @@
 #include <QObject>
 
 class MediaPlayerBackend;
+class QVideoSink;
 
 class MediaPlayer : public QObject
 {
@@ -100,6 +101,8 @@ private slots:
 
 public slots:
     void setSource(const QUrl &source);
+    void setVideoSource(const QUrl &videoSource);
+    void setVideoSink(QVideoSink *sink);
     void clearSource();
     void setPosition(qint64 position);
     void setVolume(float volume);

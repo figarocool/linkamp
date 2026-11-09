@@ -167,7 +167,7 @@ void ScrollText::paintEvent(QPaintEvent*)
         // PlayerView starts immediately below Winamp's 14 px title bar; the
         // main skin bitmap includes that title bar, plus one pixel of bevel.
         const QPoint origin = mapTo(playerView, QPoint(0, 0))
-            + QPoint(0, 15 * UI_SCALE);
+            + QPoint(4 * UI_SCALE, 14 * UI_SCALE);
         const QRect sourceRect(origin, size());
         const QRect validSource = sourceRect.intersected(mainSheet.rect());
         if (!validSource.isEmpty()) {
