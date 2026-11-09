@@ -533,17 +533,28 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 void MainWindow::showPlayer()
 {
-    if (playlist)
-        playlist->hide();
-    if (m_equalizerWindow)
-        m_equalizerWindow->hide();
-    if (milkdrop)
-        milkdrop->hide();
-    if (videoWindow)
-        videoWindow->hide();
-    show();
-    raise();
-    activateWindow();
+    if (m_mainPlayerWindow) {
+        m_mainPlayerWindow->showNormal();
+        m_mainPlayerWindow->show();
+        m_mainPlayerWindow->raise();
+        m_mainPlayerWindow->activateWindow();
+    } else {
+        showNormal();
+        show();
+        raise();
+        activateWindow();
+    }
+    if (m_minimizedWithMain) {
+        m_minimizedWithMain = false;
+        if (m_equalizerVisibleOnMinimize && m_equalizerWindow)
+            m_equalizerWindow->show();
+        if (m_playlistVisibleOnMinimize && playlist)
+            playlist->show();
+        if (m_milkdropVisibleOnMinimize && milkdrop)
+            milkdrop->show();
+        if (m_videoVisibleOnMinimize && videoWindow)
+            videoWindow->show();
+    }
 }
 
 void MainWindow::showPlaylist()
@@ -884,6 +895,36 @@ void MainWindow::changeEvent(QEvent *event)
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     QWidget *window = qobject_cast<QWidget *>(watched);
+    if (window != nullptr && window == m_mainPlayerWindow
+        && event->type() == QEvent::WindowStateChange) {
+        if (m_mainPlayerWindow->isMinimized()) {
+            if (!m_minimizedWithMain) {
+                m_minimizedWithMain = true;
+                m_playlistVisibleOnMinimize = playlist && playlist->isVisible();
+                m_equalizerVisibleOnMinimize = m_equalizerWindow && m_equalizerWindow->isVisible();
+                m_milkdropVisibleOnMinimize = milkdrop && milkdrop->isVisible();
+                m_videoVisibleOnMinimize = videoWindow && videoWindow->isVisible();
+                if (m_playlistVisibleOnMinimize)
+                    playlist->hide();
+                if (m_equalizerVisibleOnMinimize)
+                    m_equalizerWindow->hide();
+                if (m_milkdropVisibleOnMinimize)
+                    milkdrop->hide();
+                if (m_videoVisibleOnMinimize)
+                    videoWindow->hide();
+            }
+        } else if (m_minimizedWithMain) {
+            m_minimizedWithMain = false;
+            if (m_equalizerVisibleOnMinimize && m_equalizerWindow)
+                m_equalizerWindow->show();
+            if (m_playlistVisibleOnMinimize && playlist)
+                playlist->show();
+            if (m_milkdropVisibleOnMinimize && milkdrop)
+                milkdrop->show();
+            if (m_videoVisibleOnMinimize && videoWindow)
+                videoWindow->show();
+        }
+    }
     if (window != nullptr && m_mainPlayerWindow
         && (window == m_mainPlayerWindow || m_mainPlayerWindow->isAncestorOf(window))
         ) {

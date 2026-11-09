@@ -118,6 +118,11 @@ private:
     bool m_equalizerForceDetach = false;
     bool m_milkdropForceDetach = false;
     bool m_videoForceDetach = false;
+    bool m_minimizedWithMain = false;
+    bool m_playlistVisibleOnMinimize = false;
+    bool m_equalizerVisibleOnMinimize = false;
+    bool m_milkdropVisibleOnMinimize = false;
+    bool m_videoVisibleOnMinimize = false;
     QPoint m_lastMainPosition;
     QPoint m_lastPlaylistPosition;
     QPoint m_lastEqualizerPosition;
