@@ -195,7 +195,7 @@ jobs:
           path: ${{ runner.temp }}/update-packages/org.linkamp.player.windows
 
   build-macos-arm64:
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v6
