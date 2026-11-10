@@ -9,6 +9,7 @@
 #include "mediaplayer.h"
 
 class QProcess;
+class QTimer;
 class QVideoSink;
 
 class AudioSourceFile : public AudioSourceWSpectrumCapture
@@ -58,15 +59,22 @@ private:
 
     QString m_statusInfo;
     QUrl m_resolvedYouTubeMedia;
+    QUrl m_streamTrack;
     int m_streamSampleRateHz = 0;
     int m_streamBitrateKbps = 0;
+    int m_streamRetryAttempt = 0;
+    qint64 m_streamResumePosition = 0;
+    bool m_streamRetryPending = false;
+    bool m_streamSeekPending = false;
 
     bool shuffleEnabled = false;
     bool repeatEnabled = false;
     bool shouldBePlaying = false;
     QProcess *m_youtubeResolveProcess = nullptr;
+    QTimer *m_streamRetryTimer = nullptr;
 
     void setStatusInfo(const QString &info);
+    void scheduleYouTubeRetry();
     QMediaMetaData currentMetaData() const;
 
 };

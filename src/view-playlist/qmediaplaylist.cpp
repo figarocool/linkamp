@@ -799,20 +799,21 @@ void QMediaPlaylist::shuffle()
     if(d->playqueue.empty())
         return;
 
-    QList<QUrl> playqueue;
-
     // keep the current item when shuffling
+    const int currentPosition = d->currentQueuePos();
     QUrl current;
-    if (d->currentQueuePos() != -1)
-        current = d->playqueue.takeAt(d->currentQueuePos());
+    if (currentPosition != -1)
+        current = d->playqueue.takeAt(currentPosition);
 
-    while (!d->playqueue.isEmpty())
-        playqueue.append(
-                d->playqueue.takeAt(QRandomGenerator::global()->bounded(int(d->playqueue.size()))));
+    // Fisher-Yates shuffle is linear, unlike repeatedly removing a random
+    // item from the middle of a QList (which becomes quadratic for large lists).
+    for (qsizetype i = d->playqueue.size() - 1; i > 0; --i) {
+        const qsizetype j = QRandomGenerator::global()->bounded(quint32(i + 1));
+        d->playqueue.swapItemsAt(i, j);
+    }
 
-    if (d->currentQueuePos() != -1)
-        playqueue.insert(d->currentQueuePos(), current);
-    d->playqueue = playqueue;
+    if (currentPosition != -1)
+        d->playqueue.insert(currentPosition, current);
     emit mediaChanged(0, d->playqueue.count());
 }
 

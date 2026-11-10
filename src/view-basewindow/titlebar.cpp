@@ -29,9 +29,12 @@ TitleBar::TitleBar(QWidget *parent) :
         ui->horizontalLayout->removeWidget(ui->closeButton);
     }
     ui->menuButton->setGeometry(6 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
-    ui->minimizeButton->setGeometry(244 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
-    ui->shadeButton->setGeometry(254 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
-    ui->closeButton->setGeometry(264 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
+    ui->minimizeButton->setGeometry(width() - 31 * UI_SCALE, 3 * UI_SCALE,
+                                    9 * UI_SCALE, 9 * UI_SCALE);
+    ui->shadeButton->setGeometry(width() - 21 * UI_SCALE, 3 * UI_SCALE,
+                                 9 * UI_SCALE, 9 * UI_SCALE);
+    ui->closeButton->setGeometry(width() - 11 * UI_SCALE, 3 * UI_SCALE,
+                                 9 * UI_SCALE, 9 * UI_SCALE);
     connect(ui->menuButton, &QPushButton::clicked, this, &TitleBar::menuClicked);
     connect(ui->shadeButton, &QPushButton::clicked, this, &TitleBar::shadeClicked);
     connect(ui->closeButton, &QPushButton::clicked, window(), &QWidget::close);
@@ -123,9 +126,12 @@ void TitleBar::resizeEvent(QResizeEvent *event)
     QWidget::resizeEvent(event);
     if (!m_classicEqualizerStyle) {
         ui->menuButton->setGeometry(6 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
-        ui->minimizeButton->setGeometry(244 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
-        ui->shadeButton->setGeometry(254 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
-        ui->closeButton->setGeometry(264 * UI_SCALE, 3 * UI_SCALE, 9 * UI_SCALE, 9 * UI_SCALE);
+        ui->minimizeButton->setGeometry(width() - 31 * UI_SCALE, 3 * UI_SCALE,
+                                        9 * UI_SCALE, 9 * UI_SCALE);
+        ui->shadeButton->setGeometry(width() - 21 * UI_SCALE, 3 * UI_SCALE,
+                                     9 * UI_SCALE, 9 * UI_SCALE);
+        ui->closeButton->setGeometry(width() - 11 * UI_SCALE, 3 * UI_SCALE,
+                                     9 * UI_SCALE, 9 * UI_SCALE);
     }
 }
 
@@ -161,7 +167,17 @@ void TitleBar::paintEvent(QPaintEvent *event)
         if (!sprite.isNull()) {
             QPainter painter(this);
             const int titleY = (window() && window()->isActiveWindow()) ? 0 : 14;
-            painter.drawPixmap(rect(), sprite, QRect(0, titleY, 275, 14));
+            if (width() <= 275) {
+                painter.drawPixmap(rect(), sprite, QRect(0, titleY, 275, 14));
+            } else {
+                // Keep the Winamp skin's end caps and controls at their native size;
+                // stretch only the center strip for wider utility dialogs.
+                painter.drawPixmap(QRect(0, 0, 25, height()), sprite, QRect(0, titleY, 25, 14));
+                painter.drawPixmap(QRect(25, 0, width() - 50, height()), sprite,
+                                   QRect(25, titleY, 225, 14));
+                painter.drawPixmap(QRect(width() - 25, 0, 25, height()), sprite,
+                                   QRect(250, titleY, 25, 14));
+            }
             return;
         }
         QWidget::paintEvent(event);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Aggiungi a Linkamp",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Aggiunge video YouTube a Linkamp e rileva file skin .wsz sui siti web.",
   "browser_specific_settings": {
     "gecko": {

@@ -188,14 +188,17 @@ void UpdateManager::installDebianUpdate()
             QDesktopServices::openUrl(kReleasePageUrl);
             return;
         }
+        qint64 installerPid = 0;
         const bool started = QProcess::startDetached(
             pkexec,
             {QStringLiteral("/usr/bin/apt-get"), QStringLiteral("install"),
-             QStringLiteral("--yes"), m_packagePath});
-        if (started)
+             QStringLiteral("--yes"), m_packagePath}, QString(), &installerPid);
+        if (started) {
+            launchRestartHelper(installerPid);
             QCoreApplication::quit();
-        else
+        } else {
             QDesktopServices::openUrl(kReleasePageUrl);
+        }
     });
 }
 
@@ -205,10 +208,24 @@ void UpdateManager::installQtInstallerFrameworkUpdate()
     if (tool.isEmpty())
         return;
 
+    qint64 updaterPid = 0;
     const bool started = QProcess::startDetached(
-        tool, {QStringLiteral("update"), QStringLiteral("--confirm-command")});
-    if (started)
+        tool, {QStringLiteral("--confirm-command"), QStringLiteral("update")},
+        QString(), &updaterPid);
+    if (started) {
+        launchRestartHelper(updaterPid);
         QCoreApplication::quit();
+    }
+}
+
+bool UpdateManager::launchRestartHelper(qint64 processId) const
+{
+    if (processId <= 0)
+        return false;
+    return QProcess::startDetached(
+        QCoreApplication::applicationFilePath(),
+        {QStringLiteral("--linkamp-restart-after"), QString::number(processId),
+         QString::number(QCoreApplication::applicationPid())});
 }
 
 QString UpdateManager::maintenanceToolPath() const

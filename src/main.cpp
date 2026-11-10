@@ -19,6 +19,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QLockFile>
+#include <QProcess>
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
@@ -26,6 +27,11 @@
 #include <QSettings>
 #include <QIcon>
 #include <string>
+
+#include <cerrno>
+#ifndef Q_OS_WIN
+#include <signal.h>
+#endif
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -45,6 +51,24 @@ static QString appServerName()
     return QDir(runtimeDirectory).filePath(
         QStringLiteral("linkamp-youtube-%1.sock")
             .arg(qEnvironmentVariable("USER", QStringLiteral("user"))));
+}
+
+static bool processIsRunning(qint64 pid)
+{
+    if (pid <= 0)
+        return false;
+#ifdef Q_OS_WIN
+    HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(pid));
+    if (!process)
+        return GetLastError() == ERROR_ACCESS_DENIED;
+    const bool running = WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
+    CloseHandle(process);
+    return running;
+#else
+    if (::kill(static_cast<pid_t>(pid), 0) == 0)
+        return true;
+    return errno == EPERM;
+#endif
 }
 
 #ifdef Q_OS_WIN
@@ -144,6 +168,34 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName("Linkamp");
     QCoreApplication::setOrganizationName("Linkamp");
     QCoreApplication::setApplicationVersion(QStringLiteral(LINKAMP_VERSION));
+    const QStringList startupArguments = app.arguments();
+    const int restartArgument = startupArguments.indexOf(
+        QStringLiteral("--linkamp-restart-after"));
+    if (restartArgument >= 0) {
+        if (restartArgument + 2 >= startupArguments.size())
+            return 2;
+        bool installerPidOk = false;
+        bool appPidOk = false;
+        const qint64 installerPid = startupArguments.at(restartArgument + 1)
+                                        .toLongLong(&installerPidOk);
+        const qint64 appPid = startupArguments.at(restartArgument + 2)
+                                  .toLongLong(&appPidOk);
+        if (!installerPidOk || !appPidOk || installerPid <= 0 || appPid <= 0)
+            return 2;
+        auto *waitTimer = new QTimer(&app);
+        waitTimer->setInterval(500);
+        QObject::connect(waitTimer, &QTimer::timeout, &app,
+                         [&app, waitTimer, installerPid, appPid] {
+            if (processIsRunning(installerPid) || processIsRunning(appPid))
+                return;
+            waitTimer->stop();
+            QProcess::startDetached(QCoreApplication::applicationFilePath(), {});
+            app.quit();
+        });
+        waitTimer->start();
+        return app.exec();
+    }
+
     QSettings oldSettings(QStringLiteral("Rod"), QStringLiteral("Linamp"));
     QSettings linkampSettings;
     if (linkampSettings.allKeys().isEmpty() && !oldSettings.allKeys().isEmpty()) {
@@ -174,11 +226,16 @@ int main(int argc, char *argv[])
         return 0;
 
     QLockFile instanceLock(serverName + QStringLiteral(".lock"));
-    instanceLock.setStaleLockTime(1000);
+    // This lock is intentionally held for the whole application lifetime. Do
+    // not let an age-based timeout let a second copy remove a live instance's
+    // lock while its window is hidden in the tray.
+    instanceLock.setStaleLockTime(0);
     if (!instanceLock.tryLock(2000)) {
         if (sendUrlsToRunningInstance(serverName, requestedUrls, requestedSkins, 1500))
             return 0;
-        qWarning() << "Another Linkamp instance is starting; request could not be forwarded";
+        // QLockFile already detects a dead same-host PID. For a live process,
+        // never force-remove its lock just because its IPC socket is busy.
+        qWarning() << "Another Linkamp instance is running; request could not be forwarded";
         return 1;
     }
 
@@ -213,9 +270,7 @@ int main(int argc, char *argv[])
 
                     const QJsonArray urls = message.object().value(QStringLiteral("urls")).toArray();
                     const QJsonArray skins = message.object().value(QStringLiteral("skins")).toArray();
-                    window.show();
-                    window.raise();
-                    window.activateWindow();
+                    window.showPlayer();
                     for (const QJsonValue &value : urls)
                         window.addYouTubeUrl(value.toString());
                     for (const QJsonValue &value : skins) {
@@ -235,7 +290,7 @@ int main(int argc, char *argv[])
     #ifdef IS_EMBEDDED
     window.setWindowState(Qt::WindowFullScreen);
     #endif
-    window.show();
+    window.showPlayer();
     for (const QString &url : requestedUrls)
         QTimer::singleShot(0, &window, [&window, url]() { window.addYouTubeUrl(url); });
     for (const QJsonValue &value : requestedSkins) {

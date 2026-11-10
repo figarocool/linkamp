@@ -29,6 +29,7 @@ private:
     void downloadDebianUpdate(const QJsonObject &release);
     void installDebianUpdate();
     void installQtInstallerFrameworkUpdate();
+    bool launchRestartHelper(qint64 processId) const;
     QString maintenanceToolPath() const;
     bool isInstalledDebPackage() const;
 };

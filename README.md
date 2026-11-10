@@ -16,7 +16,7 @@ Maintainer: Stefano Basile <stefanobasile@usa.com>.
 - Offre un'interfaccia compatta ispirata a Winamp 2 Classic, con supporto alle skin classiche `.wsz`.
 - Include equalizzatore, visualizzatore audio, sorgenti Bluetooth e Spotify, e riproduzione CD nativa su Linux.
 - Le estensioni Chrome/Chromium e Firefox aggiungono il video YouTube corrente alla playlist tramite `linkamp://` e impediscono l'autoplay iniziale; sulle pagine HTTPS rilevano anche gli indirizzi e i link `.wsz` per installare e applicare direttamente le skin.
-- Dal menu contestuale del player si può collegare la playlist a Google Drive o OneDrive con l'accesso nel browser. Linkamp salva la playlist nella cartella privata dell'app nel cloud e controlla gli aggiornamenti ogni 15 secondi, senza richiedere i client desktop o cartelle montate. Google richiede l'OAuth Client ID e il client secret dell'app; il secret si configura tramite `LINKAMP_GOOGLE_OAUTH_CLIENT_SECRET` o le impostazioni utente e non va salvato nel repository. I percorsi dei file musicali locali devono esistere anche sull'altro computer, mentre i link YouTube vengono condivisi direttamente.
+- Dal menu contestuale del player si può collegare la playlist a Google Drive o OneDrive con l'accesso nel browser. Linkamp salva la playlist nella cartella privata dell'app nel cloud e controlla gli aggiornamenti ogni 15 secondi, senza richiedere i client desktop o cartelle montate. L'OAuth desktop Google usa un indirizzo locale `127.0.0.1` temporaneo per ricevere la risposta del browser; il client secret è facoltativo e, se usato, si configura tramite `LINKAMP_GOOGLE_OAUTH_CLIENT_SECRET` o le impostazioni utente. Non va salvato nel repository. I percorsi dei file musicali locali devono esistere anche sull'altro computer, mentre i link YouTube vengono condivisi direttamente.
 
 Le estensioni Firefox pubblicate come `.xpi` in questo progetto non sono firmate da Mozilla: il caricamento è temporaneo da `about:debugging`. Per l'installazione permanente occorre la firma Mozilla Add-ons. L'estensione Chrome/Chromium si carica come pacchetto non pubblicato dalla pagina `chrome://extensions/` in modalità sviluppatore.
 
@@ -104,7 +104,7 @@ This local build accepts YouTube URLs from the command line or the playlist's **
 
 Linkamp legge il titolo e aggiunge l'URL della pagina alla playlist. `yt-dlp` risolve l'audio solo quando selezioni il brano, poi lo riproduce in streaming. L'audio viene bufferizzato per la riproduzione, senza salvare MP3 o altri file. Selezionare il brano successivo interrompe lo stream corrente. Le estensioni browser mettono in pausa l'autoplay di YouTube, lasciando disponibile il pulsante Play del sito.
 
-Le estensioni sono in [`chrome-extension/`](chrome-extension/README.md) per Chrome/Chromium e [`firefox-extension/`](firefox-extension/README.md) per Firefox. Entrambe aggiungono **♫ Linkamp** accanto a Mi piace e sulle pagine skin di Winamp Skin Museum, usando lo schema locale `linkamp://`.
+Le estensioni sono in [`chrome-extension/`](chrome-extension/README.md) per Chrome/Chromium e [`firefox-extension/`](firefox-extension/README.md) per Firefox. Entrambe aggiungono **♫ Linkamp** accanto a Mi piace anche negli Shorts e sulle pagine skin di Winamp Skin Museum, usando lo schema locale `linkamp://`.
 
 ### Building a Debian package
 
@@ -124,7 +124,9 @@ sudo apt install ./linkamp_[version]_[arch].deb
 
 ### Aggiornamenti
 
-Linkamp controlla le nuove release una volta al giorno. Su Windows e macOS il manutentore incluso nell'installer scarica e applica l'aggiornamento. Su Debian installato dal pacchetto ufficiale, il player scarica il `.deb`, ne verifica l'hash SHA-256 e chiede l'autorizzazione amministrativa prima dell'installazione.
+Linkamp controlla le nuove release una volta al giorno. Gli installer ufficiali Windows x64 e macOS (Intel e Apple Silicon) usano i rispettivi repository di aggiornamento pubblicati su GitHub Pages. I pacchetti Debian Bookworm e Trixie, amd64 e arm64, scaricano la release corrispondente, verificano SHA-256 e chiedono l'autorizzazione amministrativa. Dopo l'installazione Linkamp si riavvia. Le build non installate con questi pacchetti non hanno un updater gestito.
+
+Gli archivi delle estensioni Chrome/Chromium e Firefox sono pubblicati nelle release, ma i browser non li aggiornano automaticamente da GitHub: Chrome richiede la distribuzione tramite Chrome Web Store (o policy gestite) e Firefox richiede un'estensione firmata e un canale di aggiornamento compatibile.
 
 ### Sistemi operativi supportati
 
@@ -136,7 +138,7 @@ Le release forniscono build per Linux, Windows x64 e macOS (Intel e Apple Silico
 
 Linkamp is a compact Qt 6 music player inspired by Winamp 2 Classic. It plays local audio files and streams audio from YouTube links without saving audio files, and it keeps the playlist between launches. It also includes classic `.wsz` skin support, an equalizer, an audio visualizer, Bluetooth and Spotify sources, and native CD playback on Linux.
 
-From the player's context menu, connect a playlist to Google Drive or OneDrive through browser sign-in. Linkamp stores it in the app's private cloud folder and checks for updates every 15 seconds, without requiring desktop sync clients or mounted folders. Google requires the app's OAuth client ID and client secret; configure the secret with `LINKAMP_GOOGLE_OAUTH_CLIENT_SECRET` or in user settings, and never commit it to the repository. Local audio files must also be available on the other computer, while YouTube links are shared directly.
+From the player's context menu, connect a playlist to Google Drive or OneDrive through browser sign-in. Linkamp stores it in the app's private cloud folder and checks for updates every 15 seconds, without requiring desktop sync clients or mounted folders. Google's desktop OAuth flow uses a temporary local `127.0.0.1` callback; its client secret is optional and, if used, should be configured with `LINKAMP_GOOGLE_OAUTH_CLIENT_SECRET` or in user settings, never committed to the repository. Local audio files must also be available on the other computer, while YouTube links are shared directly.
 
 To configure OAuth client IDs when building Linkamp, pass `-DLINKAMP_GOOGLE_OAUTH_CLIENT_ID=...` and `-DLINKAMP_ONEDRIVE_OAUTH_CLIENT_ID=...` to CMake. Register Linkamp as a desktop app with Google and a public desktop app with Microsoft Entra; the app uses the system browser and PKCE.
 
@@ -159,7 +161,9 @@ Release builds are provided for Linux, Windows x64, and macOS (Intel and Apple S
 
 ### Updates
 
-Linkamp checks for new releases once a day. On Windows and macOS, the maintenance tool included with the installer downloads and applies updates. On Debian installations from the official package, Linkamp downloads the matching `.deb`, verifies its SHA-256 digest, and requests administrator authorization before installation.
+Linkamp checks for new releases once a day. Official Windows x64 and macOS (Intel and Apple Silicon) installers use their respective update repositories published through GitHub Pages. Debian Bookworm and Trixie packages for amd64 and arm64 download the matching release, verify SHA-256, and request administrator authorization. Linkamp restarts after installation. Builds not installed from these packages do not have a managed updater.
+
+Chrome/Chromium and Firefox extension archives are published with releases, but browsers do not auto-update them from GitHub: Chrome requires the Chrome Web Store (or managed policies), while Firefox requires a signed extension and a supported update channel.
 
 ### Build from source
 

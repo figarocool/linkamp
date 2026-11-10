@@ -58,6 +58,7 @@ public slots:
     void showPlayer();
     void showPlaylist();
     void showMenu();
+    void showAbout();
     void showEqualizer();
     void showMilkdrop();
     void showVideoWindow();
@@ -89,6 +90,7 @@ private:
     bool m_cloudLoadPending = false;
     bool m_isLoadingPlaylist = false;
     bool m_cloudResumePending = true;
+    bool m_playlistLoadFailed = false;
     CloudPlaylistSync *m_cloudPlaylistSync = nullptr;
 
 private:
@@ -123,6 +125,7 @@ private:
     bool m_equalizerVisibleOnMinimize = false;
     bool m_milkdropVisibleOnMinimize = false;
     bool m_videoVisibleOnMinimize = false;
+    bool m_exitRequested = false;
     QPoint m_lastMainPosition;
     QPoint m_lastPlaylistPosition;
     QPoint m_lastEqualizerPosition;
@@ -133,6 +136,7 @@ private:
     void moveAttachedWindows(QWidget *source, const QPoint &delta);
     void beginAttachedWindowDrag(QWidget *window, bool detach);
     void finishAttachedWindowDrag(QWidget *window);
+    void saveWindowAttachments();
     void toggleEqualizerWindowShade();
     bool snapWindowToMain(QWidget *window);
 

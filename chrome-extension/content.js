@@ -10,6 +10,13 @@
   }
 
   function findLikeControl(container) {
+    const shortsLike = container.querySelector(
+      "ytd-reel-like-button-renderer, ytd-reel-video-renderer #like-button"
+    );
+    if (shortsLike) {
+      return shortsLike;
+    }
+
     const segmented = container.querySelector("ytd-segmented-like-dislike-button-renderer");
     if (segmented) {
       return segmented;
@@ -31,6 +38,26 @@
   }
 
   function findLikePlacement() {
+    if (window.location.pathname.startsWith("/shorts/")) {
+      const activeShort = document.querySelector("ytd-reel-video-renderer[is-active]")
+        || document.querySelector("ytd-reel-video-renderer");
+      if (activeShort) {
+        const actionContainer = activeShort.querySelector(
+          "#actions, #action-buttons, .actions"
+        );
+        const likeControl = findLikeControl(actionContainer || activeShort);
+        if (likeControl) {
+          // Some Shorts layouts don't expose a shared #actions row. Insert beside
+          // the Like component itself in that case, inside its action column.
+          const actionRow = actionContainer || likeControl.parentElement;
+          if (!actionRow || actionRow === activeShort)
+            return null;
+          return { actionRow, likeControl, isShorts: true };
+        }
+      }
+      return null;
+    }
+
     const metadata = document.querySelector("ytd-watch-metadata");
     const actionRows = metadata
       ? metadata.querySelectorAll("#top-level-buttons-computed")
@@ -97,8 +124,10 @@
       });
     }
 
-    if (button.textContent !== "♫  Linkamp") {
-      button.textContent = "♫  Linkamp";
+    const isShorts = placement.isShorts === true;
+    const buttonText = isShorts ? "♫" : "♫  Linkamp";
+    if (button.textContent !== buttonText) {
+      button.textContent = buttonText;
     }
     const buttonTitle = "Aggiungi questo video alla playlist Linkamp (solo audio in streaming)";
     if (button.title !== buttonTitle) {
@@ -107,7 +136,23 @@
     if (button.getAttribute("aria-label") !== "Aggiungi a Linkamp") {
       button.setAttribute("aria-label", "Aggiungi a Linkamp");
     }
-    const buttonStyle = [
+    const buttonStyle = (isShorts ? [
+      "appearance:none",
+      "display:inline-flex",
+      "align-items:center",
+      "justify-content:center",
+      "width:48px",
+      "height:48px",
+      "flex-shrink:0",
+      "margin:8px 0 0",
+      "padding:0",
+      "border:0",
+      "border-radius:50%",
+      "background:#c4302b",
+      "color:#fff",
+      "font:700 22px Roboto,Arial,sans-serif",
+      "cursor:pointer"
+    ] : [
       "appearance:none",
       "display:inline-flex",
       "align-items:center",
@@ -123,10 +168,11 @@
       "font:500 14px Roboto,Arial,sans-serif",
       "white-space:nowrap",
       "cursor:pointer"
-    ].join(";");
-    if (button.dataset.linkampStyled !== "true") {
+    ]).join(";");
+    const styleMode = isShorts ? "shorts" : "watch";
+    if (button.dataset.linkampStyled !== styleMode) {
       button.style.cssText = buttonStyle;
-      button.dataset.linkampStyled = "true";
+      button.dataset.linkampStyled = styleMode;
     }
 
     const { actionRow, likeControl } = placement;

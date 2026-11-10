@@ -7,10 +7,13 @@ MainMenuView::MainMenuView(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    // Keep the Spotify integration available in code, but hide its unfinished
+    // source selector until playback control is implemented.
+    ui->spotifyButtonWidget->hide();
+
     connect(ui->backButton, &QPushButton::clicked, this, &MainMenuView::backClicked);
     connect(ui->fileSourceButton, &QPushButton::clicked, this, &MainMenuView::fileSourceClicked);
     connect(ui->btSourceButton, &QPushButton::clicked, this, &MainMenuView::btSourceClicked);
-    connect(ui->spotifySourceButton, &QPushButton::clicked, this, &MainMenuView::spotifySourceClicked);
     connect(ui->cdSourceButton, &QPushButton::clicked, this, &MainMenuView::cdSourceClicked);
 }
 

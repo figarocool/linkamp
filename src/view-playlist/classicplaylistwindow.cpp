@@ -5,6 +5,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QClipboard>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -518,6 +519,29 @@ void ClassicPlaylistWindow::paintEvent(QPaintEvent *event)
 void ClassicPlaylistWindow::mousePressEvent(QMouseEvent *event)
 {
     const QPoint pos = event->position().toPoint();
+    if (event->button() == Qt::RightButton) {
+        const int row = rowAt(pos);
+        if (row >= 0) {
+            m_selectedRows.clear();
+            m_selectedRows.insert(row);
+            update();
+
+            const QUrl url = m_playlist->media(row);
+            const bool youtube = isYouTubeUrl(url);
+            const QString copyText = youtube ? url.toString(QUrl::FullyEncoded)
+                : (url.isLocalFile() ? url.toLocalFile() : url.toString());
+            if (!copyText.isEmpty()) {
+                QMenu menu(this);
+                QAction *copy = menu.addAction(youtube ? tr("Copy YouTube link")
+                                                      : tr("Copy path"));
+                if (menu.exec(event->globalPosition().toPoint()) == copy)
+                    QApplication::clipboard()->setText(copyText);
+            }
+            event->accept();
+            return;
+        }
+    }
+
     if (!m_windowShaded && event->button() == Qt::LeftButton
         && pos.x() >= width() - 16 && pos.x() < width() - 7
         && pos.y() >= 20 && pos.y() < height() - 38) {
@@ -595,10 +619,15 @@ void ClassicPlaylistWindow::mousePressEvent(QMouseEvent *event)
     if (row >= 0) {
         if (!(event->modifiers() & Qt::ControlModifier))
             m_selectedRows.clear();
-        if (event->modifiers() & Qt::ControlModifier && m_selectedRows.contains(row))
+        if (event->modifiers() & Qt::ControlModifier && m_selectedRows.contains(row)) {
             m_selectedRows.remove(row);
-        else
+        } else {
             m_selectedRows.insert(row);
+            if (!(event->modifiers() & Qt::ControlModifier)) {
+                m_draggingRow = true;
+                m_draggedRow = row;
+            }
+        }
         update();
     }
     QDialog::mousePressEvent(event);
@@ -606,6 +635,30 @@ void ClassicPlaylistWindow::mousePressEvent(QMouseEvent *event)
 
 void ClassicPlaylistWindow::mouseMoveEvent(QMouseEvent *event)
 {
+    if (m_draggingRow && (event->buttons() & Qt::LeftButton)) {
+        const int count = m_playlist->mediaCount();
+        if (count > 1 && m_draggedRow >= 0 && m_draggedRow < count) {
+            const QPoint pos = event->position().toPoint();
+            const int visibleRows = std::max(1, (height() - kListBottomInset - kListTop) / kRowHeight);
+            const int maxFirstRow = std::max(0, count - visibleRows);
+            if (pos.y() < kListTop && m_firstVisibleRow > 0) {
+                --m_firstVisibleRow;
+            } else if (pos.y() >= kListTop + visibleRows * kRowHeight && m_firstVisibleRow < maxFirstRow) {
+                ++m_firstVisibleRow;
+            }
+            const int relRow = (pos.y() - kListTop) / kRowHeight;
+            const int targetRow = std::clamp(m_firstVisibleRow + relRow, 0, count - 1);
+            if (targetRow != m_draggedRow) {
+                m_playlist->moveMedia(m_draggedRow, targetRow);
+                m_selectedRows.clear();
+                m_selectedRows.insert(targetRow);
+                m_draggedRow = targetRow;
+                update();
+            }
+        }
+        event->accept();
+        return;
+    }
     if (m_draggingScrollbar && (event->buttons() & Qt::LeftButton)) {
         const int visibleRows = std::max(1, (height() - 38 - 20 - 2) / kRowHeight);
         const int maxFirstRow = std::max(0, m_playlist->mediaCount() - visibleRows);
@@ -648,6 +701,12 @@ void ClassicPlaylistWindow::mouseMoveEvent(QMouseEvent *event)
 
 void ClassicPlaylistWindow::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (m_draggingRow && event->button() == Qt::LeftButton) {
+        m_draggingRow = false;
+        m_draggedRow = -1;
+        event->accept();
+        return;
+    }
     if (m_draggingScrollbar && event->button() == Qt::LeftButton) {
         m_draggingScrollbar = false;
         event->accept();

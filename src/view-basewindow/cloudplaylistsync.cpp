@@ -29,6 +29,17 @@ QByteArray formEncode(const QUrlQuery &query)
 {
     return query.toString(QUrl::FullyEncoded).toUtf8();
 }
+
+bool hasPlaylistEntries(const QByteArray &data)
+{
+    const QList<QByteArray> lines = data.split('\n');
+    for (QByteArray line : lines) {
+        line = line.trimmed();
+        if (!line.isEmpty() && !line.startsWith('#'))
+            return true;
+    }
+    return false;
+}
 }
 
 CloudPlaylistSync::CloudPlaylistSync(QObject *parent)
@@ -136,13 +147,15 @@ void CloudPlaylistSync::connectProvider(Provider provider)
     beginAuthorization();
 }
 
-void CloudPlaylistSync::resumeSavedProvider()
+void CloudPlaylistSync::resumeSavedProvider(bool preferRemote)
 {
     const QString provider = QSettings().value(QStringLiteral("cloud/provider")).toString();
     if (provider != QLatin1String("google") && provider != QLatin1String("onedrive"))
         return;
     setProvider(provider == QLatin1String("google") ? Provider::GoogleDrive
                                                      : Provider::OneDrive);
+    if (preferRemote)
+        m_remoteVersion.clear();
     if (clientId().isEmpty() || m_refreshToken.isEmpty())
         return;
     emit statusChanged(tr("Connessione a %1…").arg(providerName()));
@@ -173,6 +186,12 @@ void CloudPlaylistSync::disconnectProvider()
 
 void CloudPlaylistSync::publish(const QByteArray &playlist)
 {
+    // A transient empty model during startup or a failed restore must never
+    // replace a populated cloud backup with a header-only M3U file.
+    if (!hasPlaylistEntries(playlist)) {
+        emit statusChanged(tr("Playlist vuota: mantengo la copia cloud esistente."));
+        return;
+    }
     m_playlistData = playlist;
     if (m_connected) {
         m_localDirty = true;
@@ -200,7 +219,7 @@ void CloudPlaylistSync::beginAuthorization()
             QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
     // Use the IPv4 loopback address explicitly. Several Linux browsers resolve
     // "localhost" to ::1 first, while the listener below is bound to 127.0.0.1.
-    m_redirectUri = QStringLiteral("http://127.0.0.1:%1/").arg(m_callbackServer.serverPort());
+    m_redirectUri = QStringLiteral("http://127.0.0.1:%1").arg(m_callbackServer.serverPort());
     const QUrl redirect(m_redirectUri);
     QUrl authorizeUrl(m_provider == Provider::GoogleDrive
         ? QStringLiteral("https://accounts.google.com/o/oauth2/v2/auth")
@@ -293,8 +312,9 @@ void CloudPlaylistSync::exchangeCode(const QString &code)
 {
     QUrlQuery form;
     form.addQueryItem(QStringLiteral("client_id"), clientId());
-    if (m_provider == Provider::GoogleDrive)
-        form.addQueryItem(QStringLiteral("client_secret"), clientSecret());
+    const QString secret = m_provider == Provider::GoogleDrive ? clientSecret() : QString();
+    if (!secret.isEmpty())
+        form.addQueryItem(QStringLiteral("client_secret"), secret);
     form.addQueryItem(QStringLiteral("grant_type"), QStringLiteral("authorization_code"));
     form.addQueryItem(QStringLiteral("code"), code);
     form.addQueryItem(QStringLiteral("redirect_uri"), m_redirectUri);
@@ -309,6 +329,7 @@ void CloudPlaylistSync::exchangeCode(const QString &code)
     connect(reply, &QNetworkReply::finished, this, [this, reply] {
         const QByteArray response = reply->readAll();
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QString networkError = reply->errorString();
         reply->deleteLater();
         const QJsonObject object = QJsonDocument::fromJson(response).object();
         m_accessToken = object.value(QStringLiteral("access_token")).toString().toLatin1();
@@ -318,9 +339,14 @@ void CloudPlaylistSync::exchangeCode(const QString &code)
             QSettings().setValue(refreshTokenKey(), refresh);
         }
         if (status < 200 || status >= 300 || m_accessToken.isEmpty()) {
-            emit errorOccurred(tr("Login %1 fallito: %2").arg(providerName(),
-                object.value(QStringLiteral("error_description")).toString(
-                    object.value(QStringLiteral("error")).toString())));
+            QString details = object.value(QStringLiteral("error_description")).toString();
+            if (details.isEmpty())
+                details = object.value(QStringLiteral("error")).toString();
+            if (details.isEmpty())
+                details = response.trimmed().isEmpty()
+                    ? networkError : QString::fromUtf8(response).trimmed();
+            emit errorOccurred(tr("Login %1 fallito (HTTP %2): %3")
+                                   .arg(providerName()).arg(status).arg(details));
             return;
         }
         m_connected = true;
@@ -341,8 +367,9 @@ void CloudPlaylistSync::refreshAccessToken(std::function<void(bool)> done)
     }
     QUrlQuery form;
     form.addQueryItem(QStringLiteral("client_id"), clientId());
-    if (m_provider == Provider::GoogleDrive)
-        form.addQueryItem(QStringLiteral("client_secret"), clientSecret());
+    const QString secret = m_provider == Provider::GoogleDrive ? clientSecret() : QString();
+    if (!secret.isEmpty())
+        form.addQueryItem(QStringLiteral("client_secret"), secret);
     form.addQueryItem(QStringLiteral("grant_type"), QStringLiteral("refresh_token"));
     form.addQueryItem(QStringLiteral("refresh_token"), m_refreshToken);
     if (m_provider == Provider::OneDrive)
@@ -358,6 +385,7 @@ void CloudPlaylistSync::refreshAccessToken(std::function<void(bool)> done)
     connect(reply, &QNetworkReply::finished, this, [this, reply, done = std::move(done)]() mutable {
         const QByteArray response = reply->readAll();
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QString networkError = reply->errorString();
         reply->deleteLater();
         const QJsonObject object = QJsonDocument::fromJson(response).object();
         m_accessToken = object.value(QStringLiteral("access_token")).toString().toLatin1();
@@ -367,9 +395,16 @@ void CloudPlaylistSync::refreshAccessToken(std::function<void(bool)> done)
             QSettings().setValue(refreshTokenKey(), refresh);
         }
         const bool ok = status >= 200 && status < 300 && !m_accessToken.isEmpty();
-        if (!ok)
-            emit errorOccurred(tr("Rinnovo sessione %1 fallito: %2").arg(providerName(),
-                object.value(QStringLiteral("error_description")).toString()));
+        if (!ok) {
+            QString details = object.value(QStringLiteral("error_description")).toString();
+            if (details.isEmpty())
+                details = object.value(QStringLiteral("error")).toString();
+            if (details.isEmpty())
+                details = response.trimmed().isEmpty()
+                    ? networkError : QString::fromUtf8(response).trimmed();
+            emit errorOccurred(tr("Rinnovo sessione %1 fallito (HTTP %2): %3")
+                                   .arg(providerName()).arg(status).arg(details));
+        }
         if (done)
             done(ok);
     });
@@ -541,6 +576,15 @@ void CloudPlaylistSync::downloadRemote(const QString &version)
     apiRequest("GET", url, {}, [this, version](int status, QByteArray data) {
         if (status < 200 || status >= 300) {
             emit errorOccurred(tr("Download playlist cloud fallito (%1).").arg(status));
+            return;
+        }
+        if (!hasPlaylistEntries(data)) {
+            // Do not let an empty playlist from another instance erase tracks
+            // already present locally. Keep this cloud version from being
+            // downloaded repeatedly; the next non-empty local publish can heal it.
+            m_remoteVersion = version;
+            QSettings().setValue(remoteVersionKey(), version);
+            emit statusChanged(tr("La copia cloud è vuota; mantengo la playlist locale."));
             return;
         }
         m_remoteVersion = version;

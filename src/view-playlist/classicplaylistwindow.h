@@ -55,6 +55,8 @@ private:
     bool m_windowShaded = false;
     bool m_dragging = false;
     bool m_draggingScrollbar = false;
+    bool m_draggingRow = false;
+    int m_draggedRow = -1;
     bool m_resizing = false;
 
     int rowAt(const QPoint &position) const;

@@ -6,6 +6,8 @@
 #include <QIcon>
 #include <QFont>
 #include <QMenu>
+#include <QApplication>
+#include <QClipboard>
 #include <QStandardPaths>
 #include <algorithm>
 
@@ -171,6 +173,9 @@ void PlaylistView::setupPlayListUi()
     m_playlistViewScroller->setScrollerProperties(sp);
 
     ui->playList->setModel(m_playlistModel);
+    ui->playList->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->playList, &QWidget::customContextMenuRequested,
+            this, &PlaylistView::showPlaylistContextMenu);
     ui->playList->setCurrentIndex(m_playlistModel->index(m_playlist->currentIndex(), 0));
 
     ui->playList->setSortingEnabled(false);
@@ -349,6 +354,32 @@ void PlaylistView::toggleEditMode()
         ui->playList->setAcceptDrops(false);
         m_playlistViewScroller->grabGesture(ui->playList, QScroller::LeftMouseButtonGesture);
     }
+}
+
+void PlaylistView::showPlaylistContextMenu(const QPoint &position)
+{
+    const QModelIndex index = ui->playList->indexAt(position);
+    if (!index.isValid())
+        return;
+
+    if (!ui->playList->selectionModel()->isSelected(index)) {
+        ui->playList->selectionModel()->clearSelection();
+        ui->playList->selectionModel()->select(index,
+            QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        ui->playList->selectionModel()->setCurrentIndex(index, QItemSelectionModel::NoUpdate);
+    }
+
+    const QUrl url = m_playlist->media(index.row());
+    const bool youtube = isYouTubeUrl(url);
+    const QString copyText = youtube ? url.toString(QUrl::FullyEncoded)
+                                     : (url.isLocalFile() ? url.toLocalFile() : url.toString());
+    if (copyText.isEmpty())
+        return;
+
+    QMenu menu(this);
+    QAction *copy = menu.addAction(youtube ? tr("Copy YouTube link") : tr("Copy path"));
+    if (menu.exec(ui->playList->viewport()->mapToGlobal(position)) == copy)
+        QApplication::clipboard()->setText(copyText);
 }
 
 void PlaylistView::handleSelectionChanged(int index)

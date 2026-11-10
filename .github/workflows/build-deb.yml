@@ -120,7 +120,7 @@ jobs:
         run: |
           mkdir -p release
           (cd chrome-extension && zip -r ../release/linkamp-chrome-extension.zip .)
-          (cd firefox-extension && zip -r ../release/linkamp-firefox-extension.xpi .)
+          (cd firefox-extension && zip -r ../release/linkamp-firefox-extension.xpi . -x 'linkamp-firefox-extension.xpi')
       - uses: actions/upload-artifact@v7
         with:
           name: linkamp-browser-extensions

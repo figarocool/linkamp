@@ -1,6 +1,6 @@
 # Aggiungi a Linkamp — estensione Firefox
 
-L'estensione aggiunge **♫ Linkamp** accanto al controllo Mi piace nelle pagine video YouTube, mette in pausa l'avvio automatico e invia il link alla playlist tramite `linkamp://`. La riproduzione manuale dal player resta disponibile.
+L'estensione aggiunge **♫ Linkamp** accanto al controllo Mi piace nelle pagine video YouTube, inclusi gli Shorts (dove appare come pulsante rotondo nella colonna dei comandi), mette in pausa l'avvio automatico e invia il link alla playlist tramite `linkamp://`. La riproduzione manuale dal player resta disponibile.
 
 Su ogni pagina HTTPS controlla l'indirizzo e i link `.wsz`, mostrando **Installa in Linkamp** quando ne trova uno. Su [Winamp Skin Museum](https://skins.webamp.org/) il pulsante appare accanto al download. Facendo clic e autorizzando l'apertura dell'app, Linkamp scarica la skin, la installa e la applica subito. Firefox richiede l'autorizzazione ai siti web per permettere la ricerca dei link `.wsz` su domini diversi.
 

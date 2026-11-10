@@ -13,6 +13,7 @@
 #include <QHostAddress>
 
 #include "mainwindow.h"
+#include "aboutdialog.h"
 #include "desktopplayerwindow.h"
 #include "titlebar.h"
 #include "qstandardpaths.h"
@@ -43,6 +44,7 @@
 #include <QCursor>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QSizeGrip>
 #include <QSettings>
 #include <QSystemTrayIcon>
 #include <QIcon>
@@ -71,6 +73,16 @@ namespace {
 int windowBottomOnScreen(const QWidget *window)
 {
     return window->frameGeometry().bottom() + 1;
+}
+
+bool playlistDataHasTracks(const QByteArray &data)
+{
+    for (QByteArray line : data.split('\n')) {
+        line = line.trimmed();
+        if (!line.isEmpty() && !line.startsWith('#'))
+            return true;
+    }
+    return false;
 }
 }
 
@@ -126,6 +138,7 @@ MainWindow::MainWindow(QWidget *parent)
             m_playlist->setCurrentIndex(index);
     };
     connect(m_playlist, &QMediaPlaylist::loaded, this, [this, restoreSelectedTrack] {
+        m_playlistLoadFailed = false;
         if (m_cloudLoadPending) {
             m_cloudLoadPending = false;
             m_isLoadingPlaylist = false;
@@ -143,8 +156,12 @@ MainWindow::MainWindow(QWidget *parent)
             playlist->update();
         if (m_cloudResumePending) {
             m_cloudResumePending = false;
-            m_cloudPlaylistSync->publish(serializePlaylist());
-            m_cloudPlaylistSync->resumeSavedProvider();
+            if (m_playlist->mediaCount() == 0) {
+                m_cloudPlaylistSync->resumeSavedProvider(true);
+            } else {
+                m_cloudPlaylistSync->publish(serializePlaylist());
+                m_cloudPlaylistSync->resumeSavedProvider();
+            }
         }
     });
     restoreSelectedTrack();
@@ -280,6 +297,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Restore only after the playlist view has subscribed to insertion and
     // current-index changes, so a fast local M3U load is painted immediately.
     connect(m_playlist, &QMediaPlaylist::loadFailed, this, [this] {
+        m_playlistLoadFailed = true;
         if (m_cloudLoadPending) {
             m_cloudLoadPending = false;
             m_isLoadingPlaylist = false;
@@ -288,8 +306,7 @@ MainWindow::MainWindow(QWidget *parent)
         qWarning() << "Unable to restore saved playlist:" << m_playlist->errorString();
         if (m_cloudResumePending) {
             m_cloudResumePending = false;
-            m_cloudPlaylistSync->publish(serializePlaylist());
-            m_cloudPlaylistSync->resumeSavedProvider();
+            m_cloudPlaylistSync->resumeSavedProvider(true);
         }
     });
     QSettings().remove(QStringLiteral("playlist/cloudFile"));
@@ -299,8 +316,7 @@ MainWindow::MainWindow(QWidget *parent)
             if (!m_cloudResumePending)
                 return;
             m_cloudResumePending = false;
-            m_cloudPlaylistSync->publish(serializePlaylist());
-            m_cloudPlaylistSync->resumeSavedProvider();
+            m_cloudPlaylistSync->resumeSavedProvider(true);
         });
     }
 
@@ -339,6 +355,12 @@ MainWindow::MainWindow(QWidget *parent)
         m_playlistAttached = windowsAreAdjacent(m_mainPlayerWindow, playlist)
             || (m_equalizerAttached && windowsAreAdjacent(m_equalizerWindow, playlist));
     }
+    const QSettings attachmentSettings;
+    m_equalizerAttached = attachmentSettings.value(
+        QStringLiteral("windows/equalizer/attached"), m_equalizerAttached).toBool();
+    m_playlistAttached = attachmentSettings.value(
+        QStringLiteral("windows/playlist/attached"), m_playlistAttached).toBool();
+    saveWindowAttachments();
     m_milkdropAttached = false;
     m_videoAttached = false;
     m_equalizerWindow->setStyleSheet("QDialog { background: transparent; border: 0px; }");
@@ -392,7 +414,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(openLinkamp, &QAction::triggered, this, &MainWindow::showPlayer);
     trayMenu->addSeparator();
     QAction *exitLinkamp = trayMenu->addAction(tr("Esci"));
-    connect(exitLinkamp, &QAction::triggered, qApp, &QCoreApplication::quit);
+    connect(exitLinkamp, &QAction::triggered, this, [this] {
+        m_exitRequested = true;
+        QCoreApplication::quit();
+    });
     m_trayIcon->setContextMenu(trayMenu);
     connect(m_trayIcon, &QSystemTrayIcon::activated, this,
             [this](QSystemTrayIcon::ActivationReason reason) {
@@ -462,7 +487,7 @@ void MainWindow::loadSavedPlaylist()
 
 void MainWindow::schedulePlaylistSave()
 {
-    if (m_isLoadingPlaylist)
+    if (m_isLoadingPlaylist || m_playlistLoadFailed)
         return;
 
     if (!m_playlistSaveTimer) {
@@ -476,13 +501,21 @@ void MainWindow::schedulePlaylistSave()
 
 void MainWindow::saveSavedPlaylist()
 {
-    if (m_isLoadingPlaylist || !m_playlist)
+    if (m_isLoadingPlaylist || m_playlistLoadFailed || !m_playlist)
         return;
 
     if (m_playlistSaveTimer && m_playlistSaveTimer->isActive())
         m_playlistSaveTimer->stop();
 
     const QString path = defaultPlaylistPath();
+    if (m_playlist->mediaCount() == 0) {
+        QFile existingPlaylist(path);
+        if (existingPlaylist.open(QIODevice::ReadOnly)
+            && playlistDataHasTracks(existingPlaylist.readAll())) {
+            qWarning() << "Skipping empty playlist save to preserve the existing track list";
+            return;
+        }
+    }
     m_playlist->save(QUrl::fromLocalFile(path), "m3u8");
     m_cloudPlaylistSync->publish(serializePlaylist());
 }
@@ -500,7 +533,8 @@ QByteArray MainWindow::serializePlaylist() const
 
 void MainWindow::applyCloudPlaylist(const QByteArray &data)
 {
-    if (data.isEmpty() || !data.trimmed().startsWith("#EXTM3U")) {
+    if (data.isEmpty() || !data.trimmed().startsWith("#EXTM3U")
+        || !playlistDataHasTracks(data)) {
         QMessageBox::warning(this, tr("Playlist cloud"),
                              tr("Il file playlist nel cloud è vuoto o non è un M3U valido."));
         return;
@@ -519,6 +553,28 @@ void MainWindow::applyCloudPlaylist(const QByteArray &data)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    if (!m_exitRequested && m_trayIcon && m_trayIcon->isVisible()) {
+        saveSavedPlaylist();
+        if (!m_minimizedWithMain) {
+            m_playlistVisibleOnMinimize = playlist && playlist->isVisible();
+            m_equalizerVisibleOnMinimize = m_equalizerWindow && m_equalizerWindow->isVisible();
+            m_milkdropVisibleOnMinimize = milkdrop && milkdrop->isVisible();
+            m_videoVisibleOnMinimize = videoWindow && videoWindow->isVisible();
+        }
+        m_minimizedWithMain = true;
+        if (playlist)
+            playlist->hide();
+        if (m_equalizerWindow)
+            m_equalizerWindow->hide();
+        if (milkdrop)
+            milkdrop->hide();
+        if (videoWindow)
+            videoWindow->hide();
+        hide();
+        event->ignore();
+        return;
+    }
+
     saveSavedPlaylist();
     if (playlist)
         playlist->close();
@@ -574,6 +630,7 @@ void MainWindow::showPlaylist()
         m_havePlaylistPosition = true;
         m_syncingAttachedWindows = false;
         m_playlistAttached = true;
+        saveWindowAttachments();
     } else if (m_playlistAttached) {
         const int y = m_equalizerWindow && m_equalizerWindow->isVisible()
             ? windowBottomOnScreen(m_equalizerWindow)
@@ -643,8 +700,9 @@ void MainWindow::showMenu()
 #ifdef LINKAMP_HAS_LINUX_INTEGRATIONS
     QAction *cdSourceAction = menu.addAction(tr("CD source"));
     QAction *bluetoothSourceAction = menu.addAction(tr("Bluetooth source"));
-    QAction *spotifySourceAction = menu.addAction(tr("Spotify source"));
 #endif
+    menu.addSeparator();
+    QAction *aboutAction = menu.addAction(tr("About Linkamp…"));
 
     QAction *selected = menu.exec(QCursor::pos());
     if (selected == openFiles)
@@ -708,9 +766,15 @@ void MainWindow::showMenu()
         coordinator->setSource(1);
     else if (selected == cdSourceAction)
         coordinator->setSource(2);
-    else if (selected == spotifySourceAction)
-        coordinator->setSource(3);
 #endif
+    else if (selected == aboutAction)
+        showAbout();
+}
+
+void MainWindow::showAbout()
+{
+    AboutDialog dialog(nullptr);
+    dialog.exec();
 }
 
 void MainWindow::showEqualizer()
@@ -736,6 +800,7 @@ void MainWindow::showEqualizer()
         m_haveEqualizerPosition = true;
         m_syncingAttachedWindows = false;
         m_equalizerAttached = true;
+        saveWindowAttachments();
     } else if (m_equalizerAttached) {
         m_syncingAttachedWindows = true;
         m_equalizerWindow->move(m_mainPlayerWindow->frameGeometry().left(),
@@ -1056,15 +1121,20 @@ void MainWindow::beginAttachedWindowDrag(QWidget *window, bool detach)
             m_equalizerAttached = false;
             m_milkdropAttached = false;
             m_videoAttached = false;
+            saveWindowAttachments();
         }
     } else if (window == playlist) {
         m_playlistForceDetach = detach;
-        if (detach)
+        if (detach) {
             m_playlistAttached = false;
+            saveWindowAttachments();
+        }
     } else if (window == m_equalizerWindow) {
         m_equalizerForceDetach = detach;
-        if (detach)
+        if (detach) {
             m_equalizerAttached = false;
+            saveWindowAttachments();
+        }
     } else if (window == milkdrop) {
         m_milkdropForceDetach = detach;
         if (detach)
@@ -1087,6 +1157,7 @@ void MainWindow::finishAttachedWindowDrag(QWidget *window)
             m_playlistAttached = snapWindowToMain(playlist);
         if (!m_equalizerAttached && m_equalizerWindow != nullptr)
             m_equalizerAttached = snapWindowToMain(m_equalizerWindow);
+        saveWindowAttachments();
         return;
     }
     if (window == playlist) {
@@ -1094,6 +1165,7 @@ void MainWindow::finishAttachedWindowDrag(QWidget *window)
         m_playlistForceDetach = false;
         if (!forced && !m_playlistAttached)
             m_playlistAttached = snapWindowToMain(playlist);
+        saveWindowAttachments();
         return;
     }
     if (window == m_equalizerWindow) {
@@ -1101,6 +1173,7 @@ void MainWindow::finishAttachedWindowDrag(QWidget *window)
         m_equalizerForceDetach = false;
         if (!forced && !m_equalizerAttached)
             m_equalizerAttached = snapWindowToMain(m_equalizerWindow);
+        saveWindowAttachments();
         return;
     }
     if (window == milkdrop) {
@@ -1112,6 +1185,13 @@ void MainWindow::finishAttachedWindowDrag(QWidget *window)
         m_videoForceDetach = false;
         m_videoAttached = false;
     }
+}
+
+void MainWindow::saveWindowAttachments()
+{
+    QSettings settings;
+    settings.setValue(QStringLiteral("windows/playlist/attached"), m_playlistAttached);
+    settings.setValue(QStringLiteral("windows/equalizer/attached"), m_equalizerAttached);
 }
 
 bool MainWindow::snapWindowToMain(QWidget *window)
@@ -1294,34 +1374,64 @@ void MainWindow::addFolderToPlaylist()
 void MainWindow::promptForYouTubeUrl()
 {
     QDialog dialog(this, Qt::Dialog | Qt::FramelessWindowHint);
-    dialog.setWindowTitle(tr("Open URL"));
-    dialog.setFixedSize(186, 68);
-    dialog.setStyleSheet("QDialog { background:#20202c; border:1px solid #727284; }"
-                         "QLabel { color:#e8e8ef; }"
-                         "QLineEdit { background:#fff; color:#111; border:1px solid #55556a; }");
+    dialog.setWindowTitle(tr("Add YouTube URL"));
+    dialog.setMinimumSize(320, 88);
+    dialog.resize(QSettings().value(QStringLiteral("windows/youtubeDialog/size"),
+                                    QSize(380, 98)).toSize());
+    dialog.setStyleSheet(
+        "QDialog { background:#20202c; border:1px solid #727284; }"
+        "QLabel { color:#e8e8ef; }"
+        "QLineEdit { background:#090b10; color:#00e800; border:1px solid #77778a; padding:3px; }"
+        "QLineEdit:focus { border:1px solid #00e800; }"
+        "QPushButton { color:#e8e8ef; background:#303040; border:1px solid #9090a0; padding:2px 8px; }"
+        "QPushButton:pressed { color:#00e800; background:#181820; }");
 
     auto *layout = new QVBoxLayout(&dialog);
-    layout->setContentsMargins(7, 5, 7, 5);
-    layout->setSpacing(2);
+    layout->setContentsMargins(0, 0, 0, 1);
+    layout->setSpacing(0);
+    auto *titleBar = new TitleBar(&dialog);
+    titleBar->setFixedHeight(14 * UI_SCALE);
+    layout->addWidget(titleBar);
+
     auto *label = new QLabel(tr("YouTube URL:"), &dialog);
     auto *edit = new QLineEdit(&dialog);
     edit->setPlaceholderText(QStringLiteral("https://youtu.be/…"));
-    edit->setFixedHeight(16);
+    edit->setMinimumHeight(22);
     auto *buttons = new QHBoxLayout;
-    buttons->setContentsMargins(0, 0, 0, 0);
-    buttons->addStretch(1);
+    buttons->setContentsMargins(0, 2, 1, 0);
+    buttons->setSpacing(4);
     auto *addButton = new QPushButton(tr("Add"), &dialog);
     auto *cancelButton = new QPushButton(tr("Cancel"), &dialog);
-    addButton->setFixedSize(50, 14);
-    cancelButton->setFixedSize(50, 14);
+    addButton->setMinimumSize(58, 22);
+    cancelButton->setMinimumSize(58, 22);
+    buttons->addStretch(1);
     buttons->addWidget(addButton);
     buttons->addWidget(cancelButton);
-    layout->addWidget(label);
-    layout->addWidget(edit);
-    layout->addLayout(buttons);
+    buttons->addWidget(new QSizeGrip(&dialog));
+    auto *content = new QVBoxLayout;
+    content->setContentsMargins(9, 6, 7, 5);
+    content->setSpacing(4);
+    content->addWidget(label);
+    content->addWidget(edit);
+    content->addLayout(buttons);
+    layout->addLayout(content);
+
+    const QString positionKey = QStringLiteral("windows/youtubeDialog/position");
+    if (QSettings().contains(positionKey)) {
+        dialog.move(QSettings().value(positionKey).toPoint());
+    } else {
+        dialog.move(frameGeometry().center() - QPoint(dialog.width() / 2,
+                                                       dialog.height() / 2));
+    }
+    connect(&dialog, &QDialog::finished, this, [&dialog, positionKey] {
+        QSettings settings;
+        settings.setValue(positionKey, dialog.pos());
+        settings.setValue(QStringLiteral("windows/youtubeDialog/size"), dialog.size());
+    });
     connect(addButton, &QPushButton::clicked, &dialog, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, &dialog, &QDialog::reject);
     connect(edit, &QLineEdit::returnPressed, &dialog, &QDialog::accept);
+    edit->setFocus();
 
     if (dialog.exec() == QDialog::Accepted && !edit->text().trimmed().isEmpty())
         addYouTubeUrl(edit->text());

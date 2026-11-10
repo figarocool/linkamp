@@ -56,6 +56,7 @@ private slots:
     void updateTotalDuration();
 
     void toggleEditMode();
+    void showPlaylistContextMenu(const QPoint &position);
 
 signals:
     void showPlayerClicked();

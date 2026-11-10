@@ -2,6 +2,7 @@
 #include <QFileDialog>
 #include <QProcess>
 #include <QStandardPaths>
+#include <QTimer>
 
 #include "audiosourcefile.h"
 #include "util.h"
@@ -30,6 +31,25 @@ AudioSourceFile::AudioSourceFile(QObject *parent, PlaylistModel *playlistModel)
     connect(m_player, &MediaPlayer::mediaStatusChanged, this, &AudioSourceFile::handleMediaStatusChanged);
     connect(m_player, &MediaPlayer::bufferProgressChanged, this, &AudioSourceFile::handleBufferingProgress);
     connect(m_player, &MediaPlayer::errorChanged, this, &AudioSourceFile::handleMediaError);
+    m_streamRetryTimer = new QTimer(this);
+    m_streamRetryTimer->setSingleShot(true);
+    connect(m_streamRetryTimer, &QTimer::timeout, this, [this] {
+        m_streamRetryPending = false;
+        if (shouldBePlaying && isYouTubeUrl(m_playlist->currentQueueMedia()))
+            handlePlaylistPositionChanged(m_playlist->currentIndex());
+    });
+    connect(m_player, &MediaPlayer::playbackStateChanged, this,
+            [this](MediaPlayer::PlaybackState state) {
+        if (state != MediaPlayer::PlayingState || m_streamRetryAttempt == 0)
+            return;
+        const QUrl media = m_playlist->currentQueueMedia();
+        QTimer::singleShot(10000, this, [this, media] {
+            if (m_playlist->currentQueueMedia() == media && shouldBePlaying
+                && m_player->playbackState() == MediaPlayer::PlayingState
+                && m_player->error() == MediaPlayer::NoError)
+                m_streamRetryAttempt = 0;
+        });
+    });
 
     m_playlistModel = playlistModel;
     m_playlist = m_playlistModel->playlist();
@@ -77,6 +97,8 @@ void AudioSourceFile::deactivate()
 {
     // Stop everything
     shouldBePlaying = false;
+    m_streamRetryTimer->stop();
+    m_streamRetryPending = false;
     if (m_youtubeResolveProcess) {
         QProcess *process = m_youtubeResolveProcess;
         m_youtubeResolveProcess = nullptr;
@@ -109,6 +131,13 @@ void AudioSourceFile::handlePlay()
     }
     const QUrl currentMedia = m_playlist->currentQueueMedia();
     if (isYouTubeUrl(currentMedia)) {
+        if (m_streamTrack == currentMedia && m_resolvedYouTubeMedia == currentMedia
+            && (m_player->error() != MediaPlayer::NoError
+                || m_player->mediaStatus() == MediaPlayer::EndOfMedia
+                || m_player->mediaStatus() == MediaPlayer::InvalidMedia)) {
+            scheduleYouTubeRetry();
+            return;
+        }
         if (m_resolvedYouTubeMedia == currentMedia) {
             m_player->play();
             startSpectrum();
@@ -124,6 +153,8 @@ void AudioSourceFile::handlePlay()
 void AudioSourceFile::handlePause()
 {
     shouldBePlaying = false;
+    m_streamRetryTimer->stop();
+    m_streamRetryPending = false;
     m_player->pause();
     stopSpectrum();
 }
@@ -131,6 +162,11 @@ void AudioSourceFile::handlePause()
 void AudioSourceFile::handleStop()
 {
     shouldBePlaying = false;
+    m_streamRetryTimer->stop();
+    m_streamRetryPending = false;
+    m_streamRetryAttempt = 0;
+    m_streamResumePosition = 0;
+    m_streamSeekPending = false;
     if (m_youtubeResolveProcess) {
         QProcess *process = m_youtubeResolveProcess;
         m_youtubeResolveProcess = nullptr;
@@ -166,7 +202,7 @@ void AudioSourceFile::handleRepeat()
 {
     repeatEnabled = !repeatEnabled;
     QMediaPlaylist::PlaybackMode mode = QMediaPlaylist::PlaybackMode::Sequential;
-    if(repeatEnabled) mode = QMediaPlaylist::PlaybackMode::Loop;
+    if(repeatEnabled) mode = QMediaPlaylist::PlaybackMode::CurrentItemInLoop;
     m_playlist->setPlaybackMode(mode);
     emit repeatEnabledChanged(repeatEnabled);
 }
@@ -194,6 +230,11 @@ void AudioSourceFile::handleMetaDataChanged()
 
 void AudioSourceFile::handleMediaStatusChanged(MediaPlayer::MediaStatus status)
 {
+    if (status == MediaPlayer::LoadedMedia && m_streamSeekPending) {
+        m_streamSeekPending = false;
+        m_player->setPosition(m_streamResumePosition);
+    }
+
     // handle status message
     switch (status) {
     case MediaPlayer::NoMedia:
@@ -211,8 +252,36 @@ void AudioSourceFile::handleMediaStatusChanged(MediaPlayer::MediaStatus status)
         break;
     case MediaPlayer::StalledMedia:
         setStatusInfo(tr("Stalled %1%").arg(qRound(m_player->bufferProgress())));
+        if (shouldBePlaying && isYouTubeUrl(m_playlist->currentQueueMedia())) {
+            const QUrl media = m_playlist->currentQueueMedia();
+            QTimer::singleShot(10000, this, [this, media] {
+                if (shouldBePlaying && m_playlist->currentQueueMedia() == media
+                    && m_player->mediaStatus() == MediaPlayer::StalledMedia)
+                    scheduleYouTubeRetry();
+            });
+        }
         break;
     case MediaPlayer::EndOfMedia:
+        if (isYouTubeUrl(m_playlist->currentQueueMedia()) && shouldBePlaying) {
+            const QUrl media = m_playlist->currentQueueMedia();
+            QTimer::singleShot(300, this, [this, media] {
+                if (!shouldBePlaying || m_playlist->currentQueueMedia() != media
+                    || m_player->mediaStatus() != MediaPlayer::EndOfMedia)
+                    return;
+                const qint64 expectedDuration = m_playlist->queueMediaMetadata(
+                    m_playlist->currentQueueIndex()).value(QMediaMetaData::Duration).toLongLong();
+                const bool endedEarly = expectedDuration > 0
+                    && m_player->position() + 2000 < expectedDuration;
+                if (m_player->error() != MediaPlayer::NoError || endedEarly) {
+                    scheduleYouTubeRetry();
+                } else {
+                    m_streamRetryAttempt = 0;
+                    m_streamResumePosition = 0;
+                    handleNext();
+                }
+            });
+            break;
+        }
         handleNext();
         break;
     case MediaPlayer::InvalidMedia:
@@ -240,6 +309,26 @@ void AudioSourceFile::handleMediaError()
         return;
     setStatusInfo(m_player->errorString());
     qDebug() << m_player->errorString();
+    if (shouldBePlaying && isYouTubeUrl(m_playlist->currentQueueMedia()))
+        scheduleYouTubeRetry();
+}
+
+void AudioSourceFile::scheduleYouTubeRetry()
+{
+    const QUrl media = m_playlist->currentQueueMedia();
+    if (!shouldBePlaying || !isYouTubeUrl(media) || m_streamRetryPending)
+        return;
+
+    if (m_resolvedYouTubeMedia == media)
+        m_streamResumePosition = m_player->position();
+
+    const int exponent = qMin(m_streamRetryAttempt, 5);
+    const int delayMs = qMin(30000, 1000 * (1 << exponent));
+    ++m_streamRetryAttempt;
+    m_streamRetryPending = true;
+    m_streamRetryTimer->start(delayMs);
+    setStatusInfo(tr("Connessione interrotta, riprovo tra %1 s…")
+                      .arg(qMax(1, delayMs / 1000)));
 }
 
 void AudioSourceFile::setStatusInfo(const QString &info)
@@ -254,10 +343,21 @@ void AudioSourceFile::setStatusInfo(const QString &info)
 
 void AudioSourceFile::handlePlaylistPositionChanged(int)
 {
+    const QUrl media = m_playlist->currentQueueMedia();
+    const bool sameStream = isYouTubeUrl(media) && media == m_streamTrack;
+    if (!sameStream) {
+        m_streamRetryTimer->stop();
+        m_streamRetryPending = false;
+        m_streamRetryAttempt = 0;
+        m_streamResumePosition = 0;
+        m_streamSeekPending = false;
+        m_streamTrack = isYouTubeUrl(media) ? media : QUrl();
+        emit positionChanged(0);
+    }
+
     // Clear the previous track's seek position immediately. Some backends do
     // not report position 0 until after the new source starts buffering, so
     // otherwise the seek thumb briefly remains offset from the beginning.
-    emit positionChanged(0);
     m_resolvedYouTubeMedia = QUrl();
     m_streamSampleRateHz = 0;
     m_streamBitrateKbps = 0;
@@ -268,7 +368,6 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
         previousProcess->deleteLater();
     }
 
-    const QUrl media = m_playlist->currentQueueMedia();
     if (isYouTubeUrl(media)) {
         m_player->stop();
         m_player->clearSource();
@@ -303,6 +402,7 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
             if (exitCode != 0) {
                 setStatusInfo(errorOutput.isEmpty() ? tr("Impossibile aprire il link YouTube")
                                                     : errorOutput.left(180));
+                scheduleYouTubeRetry();
                 return;
             }
 
@@ -333,6 +433,7 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
             const QUrl resolvedVideoUrl(videoStreamStr);
             if (audioStreamStr.isEmpty() || !resolvedUrl.isValid()) {
                 setStatusInfo(tr("YouTube non ha restituito uno stream audio"));
+                scheduleYouTubeRetry();
                 return;
             }
 
@@ -348,10 +449,12 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
                 streamMetadata.insert(QMediaMetaData::AudioBitRate,
                                       m_streamBitrateKbps * 1000);
             emit metadataChanged(streamMetadata);
+            m_streamSeekPending = m_streamResumePosition > 0;
             m_player->setSource(resolvedUrl);
             if (resolvedVideoUrl.isValid() && !resolvedVideoUrl.isEmpty() && resolvedVideoUrl != resolvedUrl)
                 m_player->setVideoSource(resolvedVideoUrl);
-            m_player->setPosition(0);
+            if (!m_streamSeekPending)
+                m_player->setPosition(0);
             if (shouldBePlaying) {
                 m_player->play();
                 startSpectrum();
@@ -363,6 +466,7 @@ void AudioSourceFile::handlePlaylistPositionChanged(int)
                 return;
             m_youtubeResolveProcess = nullptr;
             setStatusInfo(tr("Impossibile avviare yt-dlp"));
+            scheduleYouTubeRetry();
             process->deleteLater();
         });
         process->start(ytDlp, {

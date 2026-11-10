@@ -1,3 +1,11 @@
+linkamp (1.6.5) unstable; urgency=medium
+
+  * Hide the unfinished Spotify source selector from the user interface.
+  * Improve YouTube Shorts support in the browser extensions.
+  * Fix playlist, cloud sync, startup, and update handling.
+
+ -- Stefano Basile <stefanobasile@usa.com>  Tue, 10 Nov 2026 23:00:00 +0100
+
 linkamp (1.6.3) unstable; urgency=medium
 
   * Rebrand the desktop application and YouTube integration as Linkamp.

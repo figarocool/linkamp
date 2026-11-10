@@ -1,6 +1,6 @@
 # Aggiungi a Linkamp — estensione Chrome/Chromium
 
-L'estensione aggiunge il pulsante rosso **♫ Linkamp** accanto al controllo Mi piace sulle pagine video YouTube e mette in pausa l'avvio automatico. La riproduzione manuale dal player continua a funzionare. Facendo clic sul pulsante, invia il link a Linkamp tramite lo schema locale `linkamp://`.
+L'estensione aggiunge il pulsante rosso **♫ Linkamp** accanto al controllo Mi piace sulle pagine video YouTube, inclusi gli Shorts (dove compare come pulsante rotondo nella colonna dei comandi), e mette in pausa l'avvio automatico. La riproduzione manuale dal player continua a funzionare. Facendo clic sul pulsante, invia il link a Linkamp tramite lo schema locale `linkamp://`.
 
 Su ogni pagina HTTPS controlla l'indirizzo aperto e i link che terminano in `.wsz`; accanto a questi compare **Installa in Linkamp**. Sulle pagine skin di [Winamp Skin Museum](https://skins.webamp.org/) il pulsante appare vicino al download. Fai clic e conferma l'apertura dell'app: Linkamp scarica il file, lo installa nella propria cartella skin e lo applica subito. Chrome chiede accesso ai siti web perché l'estensione deve trovare i link `.wsz` anche fuori da Winamp Skin Museum.
 

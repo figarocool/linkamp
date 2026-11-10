@@ -159,23 +159,41 @@ void ScrollText::paintEvent(QPaintEvent*)
 
     // The ticker sits over the main skin bitmap. Restore its exact patch
     // before drawing text so transparent font pixels reveal the skin cleanly.
+    QWidget *skinWindow = parentWidget();
+    while (skinWindow && skinWindow->objectName() != QLatin1String("DesktopBaseWindow"))
+        skinWindow = skinWindow->parentWidget();
     QWidget *playerView = parentWidget();
     while (playerView && playerView->objectName() != QLatin1String("PlayerView"))
         playerView = playerView->parentWidget();
     const QImage mainSheet = WinampSkin::instance().sheet(QStringLiteral("main"));
-    if (playerView && !mainSheet.isNull()) {
-        // PlayerView starts immediately below Winamp's 14 px title bar; the
-        // main skin bitmap includes that title bar, plus one pixel of bevel.
-        const QPoint origin = mapTo(playerView, QPoint(0, 0))
-            + QPoint(4 * UI_SCALE, 14 * UI_SCALE);
+    if ((skinWindow || playerView) && !mainSheet.isNull()) {
+        // The desktop shell stretches the full main skin to its own size (277x117
+        // for the built-in 275x116 bitmap). Sample from that same stretched image
+        // so the ticker's restored pixels stay aligned with the visible skin edge.
+        QImage displayedSkin = mainSheet;
+        QPoint origin;
+        if (skinWindow) {
+            if (mainSheet.size() != skinWindow->size()) {
+                displayedSkin = mainSheet.scaled(skinWindow->size(), Qt::IgnoreAspectRatio,
+                                                 Qt::FastTransformation);
+            }
+            origin = mapTo(skinWindow, QPoint(0, 0));
+        } else {
+            // Embedded shells keep the previous PlayerView-relative bitmap mapping.
+            origin = mapTo(playerView, QPoint(0, 0)) + QPoint(4 * UI_SCALE, 14 * UI_SCALE);
+        }
         const QRect sourceRect(origin, size());
-        const QRect validSource = sourceRect.intersected(mainSheet.rect());
+        const QRect validSource = sourceRect.intersected(displayedSkin.rect());
         if (!validSource.isEmpty()) {
             const QRect targetRect(validSource.topLeft() - origin, validSource.size());
-            p.drawImage(targetRect, mainSheet, validSource);
+            p.drawImage(targetRect, displayedSkin, validSource);
         }
     }
-    const int y = std::max(0, (height() - 6) / 2);
+    int y = std::max(0, (height() - 6) / 2);
+    // The embedded Classic font atlas has one extra blank row above its
+    // glyphs compared with Winamp's TEXT.BMP, so align only the built-in skin.
+    if (WinampSkin::instance().filePath().isEmpty())
+        y = std::max(0, y - UI_SCALE);
 
     if (scrollEnabled) {
         int x = qMin(-scrollPos, 0) + leftMargin;

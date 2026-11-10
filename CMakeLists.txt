@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 set(LINKAMP_PROJECT_VERSION "$ENV{LINKAMP_BUILD_VERSION}")
 if(NOT LINKAMP_PROJECT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+")
-    set(LINKAMP_PROJECT_VERSION 1.6.4)
+    set(LINKAMP_PROJECT_VERSION 1.6.5)
 endif()
 project(Linkamp VERSION ${LINKAMP_PROJECT_VERSION} LANGUAGES C CXX)
 
@@ -96,6 +96,8 @@ qt_add_executable(player WIN32 MACOSX_BUNDLE
     src/view-basewindow/embeddedbasewindow.ui
     src/view-basewindow/mainwindow.cpp
     src/view-basewindow/mainwindow.h
+    src/view-basewindow/aboutdialog.cpp
+    src/view-basewindow/aboutdialog.h
     src/view-basewindow/cloudplaylistsync.cpp
     src/view-basewindow/cloudplaylistsync.h
     src/view-basewindow/titlebar.cpp
@@ -215,6 +217,7 @@ if(WIN32)
 endif()
 
 target_compile_definitions(player PRIVATE LINKAMP_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(player PRIVATE LINKAMP_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_compile_definitions(player PRIVATE
     LINKAMP_GOOGLE_OAUTH_CLIENT_ID="${LINKAMP_GOOGLE_OAUTH_CLIENT_ID}"
     LINKAMP_ONEDRIVE_OAUTH_CLIENT_ID="${LINKAMP_ONEDRIVE_OAUTH_CLIENT_ID}"

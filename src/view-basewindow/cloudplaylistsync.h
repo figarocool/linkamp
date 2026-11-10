@@ -23,7 +23,7 @@ public:
     bool isConnected() const { return m_connected; }
     QString providerName() const;
     void connectProvider(Provider provider);
-    void resumeSavedProvider();
+    void resumeSavedProvider(bool preferRemote = false);
     void disconnectProvider();
     void publish(const QByteArray &playlist);
 
