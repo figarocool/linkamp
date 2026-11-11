@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QByteArray>
+#include <QHash>
 #include <QNetworkAccessManager>
 #include <QPointer>
 #include <QTcpServer>
@@ -26,6 +27,7 @@ public:
     void resumeSavedProvider(bool preferRemote = false);
     void disconnectProvider();
     void publish(const QByteArray &playlist);
+    void reportPlaylistLoadResult(bool applied, const QString &errorMessage = {});
 
 signals:
     void playlistDownloaded(const QByteArray &data);
@@ -33,9 +35,17 @@ signals:
     void errorOccurred(const QString &message);
 
 private:
+    struct OAuthAttempt {
+        quint64 generation = 0;
+        QString state;
+        QString codeVerifier;
+        QString redirectUri;
+    };
+
     void beginAuthorization();
     void handleBrowserRequest();
-    void exchangeCode(const QString &code);
+    void exchangeCode(const QString &code, const QString &codeVerifier,
+                      const QString &redirectUri);
     void refreshAccessToken(std::function<void(bool)> done = {});
     void checkRemote();
     void downloadRemote(const QString &version);
@@ -65,6 +75,9 @@ private:
     QString m_redirectUri;
     QString m_remoteFileId;
     QString m_remoteVersion;
+    QString m_pendingRemoteVersion;
+    quint64 m_authAttempt = 0;
+    QHash<quint16, OAuthAttempt> m_oauthAttemptsByPort;
     bool m_connected = false;
     bool m_uploading = false;
     bool m_polling = false;

@@ -139,19 +139,7 @@ MainWindow::MainWindow(QWidget *parent)
     };
     connect(m_playlist, &QMediaPlaylist::loaded, this, [this, restoreSelectedTrack] {
         m_playlistLoadFailed = false;
-        if (m_cloudLoadPending) {
-            m_cloudLoadPending = false;
-            m_isLoadingPlaylist = false;
-            int restoreIndex = m_cloudRestoreIndex;
-            if (restoreIndex < 0)
-                restoreIndex = QSettings().value(QStringLiteral("playlist/currentIndex"), 0).toInt();
-            if (m_playlist->mediaCount() > 0)
-                m_playlist->setCurrentIndex(qBound(0, restoreIndex,
-                                                   m_playlist->mediaCount() - 1));
-            m_cloudRestoreIndex = -1;
-        } else {
-            restoreSelectedTrack();
-        }
+        restoreSelectedTrack();
         if (playlist)
             playlist->update();
         if (m_cloudResumePending) {
@@ -298,11 +286,6 @@ MainWindow::MainWindow(QWidget *parent)
     // current-index changes, so a fast local M3U load is painted immediately.
     connect(m_playlist, &QMediaPlaylist::loadFailed, this, [this] {
         m_playlistLoadFailed = true;
-        if (m_cloudLoadPending) {
-            m_cloudLoadPending = false;
-            m_isLoadingPlaylist = false;
-            m_cloudRestoreIndex = -1;
-        }
         qWarning() << "Unable to restore saved playlist:" << m_playlist->errorString();
         if (m_cloudResumePending) {
             m_cloudResumePending = false;
@@ -535,20 +518,81 @@ void MainWindow::applyCloudPlaylist(const QByteArray &data)
 {
     if (data.isEmpty() || !data.trimmed().startsWith("#EXTM3U")
         || !playlistDataHasTracks(data)) {
-        QMessageBox::warning(this, tr("Playlist cloud"),
-                             tr("Il file playlist nel cloud è vuoto o non è un M3U valido."));
+        m_cloudPlaylistSync->reportPlaylistLoadResult(
+            false, tr("Il file playlist nel cloud è vuoto o non è un M3U valido."));
         return;
     }
 
-    QBuffer buffer;
-    buffer.setData(data);
-    if (!buffer.open(QIODevice::ReadOnly))
+    if (m_cloudCandidatePlaylist) {
+        m_cloudCandidatePlaylist->deleteLater();
+        m_cloudCandidatePlaylist = nullptr;
+    }
+    if (m_cloudCandidateBuffer) {
+        m_cloudCandidateBuffer->deleteLater();
+        m_cloudCandidateBuffer = nullptr;
+    }
+
+    auto *candidate = new QMediaPlaylist(this);
+    auto *buffer = new QBuffer(this);
+    m_cloudCandidatePlaylist = candidate;
+    m_cloudCandidateBuffer = buffer;
+    buffer->setData(data);
+    if (!buffer->open(QIODevice::ReadOnly)) {
+        candidate->deleteLater();
+        buffer->deleteLater();
+        m_cloudCandidatePlaylist = nullptr;
+        m_cloudCandidateBuffer = nullptr;
+        m_cloudPlaylistSync->reportPlaylistLoadResult(
+            false, tr("Non riesco a leggere la playlist scaricata dal cloud."));
         return;
-    m_cloudRestoreIndex = m_playlist->currentIndex();
-    m_cloudLoadPending = true;
-    m_isLoadingPlaylist = true;
-    m_playlist->clear();
-    m_playlist->load(&buffer, "m3u8");
+    }
+
+    connect(candidate, &QMediaPlaylist::loaded, this, [this, candidate, buffer] {
+        if (candidate != m_cloudCandidatePlaylist)
+            return;
+        if (candidate->mediaCount() == 0) {
+            m_cloudCandidatePlaylist = nullptr;
+            m_cloudCandidateBuffer = nullptr;
+            candidate->deleteLater();
+            buffer->deleteLater();
+            m_cloudPlaylistSync->reportPlaylistLoadResult(
+                false, tr("La playlist scaricata non contiene brani leggibili."));
+            return;
+        }
+
+        int restoreIndex = m_playlist->currentIndex();
+        if (restoreIndex < 0)
+            restoreIndex = QSettings().value(QStringLiteral("playlist/currentIndex"), 0).toInt();
+
+        m_isLoadingPlaylist = true;
+        m_playlistLoadFailed = false;
+        m_playlist->clear();
+        for (int i = 0; i < candidate->mediaCount(); ++i)
+            m_playlist->addMedia(candidate->media(i), candidate->mediaMetadata(i));
+        m_playlist->setCurrentIndex(qBound(0, restoreIndex, m_playlist->mediaCount() - 1));
+        m_isLoadingPlaylist = false;
+        if (playlist)
+            playlist->update();
+
+        m_cloudCandidatePlaylist = nullptr;
+        m_cloudCandidateBuffer = nullptr;
+        candidate->deleteLater();
+        buffer->deleteLater();
+        saveSavedPlaylist();
+        m_cloudPlaylistSync->reportPlaylistLoadResult(true);
+    });
+    connect(candidate, &QMediaPlaylist::loadFailed, this, [this, candidate, buffer] {
+        if (candidate != m_cloudCandidatePlaylist)
+            return;
+        const QString details = candidate->errorString();
+        m_cloudCandidatePlaylist = nullptr;
+        m_cloudCandidateBuffer = nullptr;
+        candidate->deleteLater();
+        buffer->deleteLater();
+        m_cloudPlaylistSync->reportPlaylistLoadResult(
+            false, tr("Non riesco a leggere la playlist scaricata dal cloud: %1").arg(details));
+    });
+    candidate->load(buffer, "m3u8");
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)

@@ -1,3 +1,10 @@
+linkamp (1.6.6) unstable; urgency=medium
+
+  * Fix duplicate Google OAuth callbacks and cloud playlist loading.
+  * Restore valid local playlists and sync them reliably to cloud storage.
+
+ -- Stefano Basile <stefanobasile@usa.com>  Wed, 11 Nov 2026 02:35:00 +0100
+
 linkamp (1.6.5) unstable; urgency=medium
 
   * Hide the unfinished Spotify source selector from the user interface.

@@ -193,15 +193,33 @@ void CloudPlaylistSync::publish(const QByteArray &playlist)
         return;
     }
     m_playlistData = playlist;
-    if (m_connected) {
-        m_localDirty = true;
-    }
+    m_localDirty = true;
     if (m_connected && !m_uploading && !m_polling)
         uploadRemote();
 }
 
+void CloudPlaylistSync::reportPlaylistLoadResult(bool applied, const QString &errorMessage)
+{
+    if (!m_pendingRemoteVersion.isEmpty()) {
+        // Remember an unreadable remote version to avoid showing the same
+        // parser error on every poll. A forced restore clears this version.
+        m_remoteVersion = m_pendingRemoteVersion;
+        QSettings().setValue(remoteVersionKey(), m_remoteVersion);
+        m_pendingRemoteVersion.clear();
+    }
+    if (applied) {
+        emit statusChanged(tr("Playlist aggiornata da %1").arg(providerName()));
+    } else {
+        emit errorOccurred(errorMessage.isEmpty()
+            ? tr("Non riesco a caricare la playlist scaricata da %1.").arg(providerName())
+            : errorMessage);
+    }
+}
+
 void CloudPlaylistSync::beginAuthorization()
 {
+    ++m_authAttempt;
+    m_oauthAttemptsByPort.clear();
     // A previous login attempt may have been cancelled in the browser while
     // its local listener was still open. Reset it before binding a new port.
     if (m_callbackServer.isListening())
@@ -220,6 +238,8 @@ void CloudPlaylistSync::beginAuthorization()
     // Use the IPv4 loopback address explicitly. Several Linux browsers resolve
     // "localhost" to ::1 first, while the listener below is bound to 127.0.0.1.
     m_redirectUri = QStringLiteral("http://127.0.0.1:%1").arg(m_callbackServer.serverPort());
+    m_oauthAttemptsByPort.insert(m_callbackServer.serverPort(),
+        OAuthAttempt{m_authAttempt, m_state, m_codeVerifier, m_redirectUri});
     const QUrl redirect(m_redirectUri);
     QUrl authorizeUrl(m_provider == Provider::GoogleDrive
         ? QStringLiteral("https://accounts.google.com/o/oauth2/v2/auth")
@@ -279,36 +299,69 @@ void CloudPlaylistSync::handleBrowserRequest()
     QTcpSocket *socket = m_callbackServer.nextPendingConnection();
     if (!socket)
         return;
-    connect(socket, &QTcpSocket::readyRead, this, [this, socket] {
-        const QByteArray request = socket->readAll();
+    const quint16 localPort = socket->localPort();
+    const bool attemptKnown = m_oauthAttemptsByPort.contains(localPort);
+    const OAuthAttempt attempt = m_oauthAttemptsByPort.value(localPort);
+    connect(socket, &QTcpSocket::readyRead, this,
+            [this, socket, localPort, attemptKnown, attempt] {
+        if (socket->property("oauthRequestHandled").toBool())
+            return;
+        QByteArray request = socket->property("oauthRequest").toByteArray();
+        request += socket->readAll();
+        socket->setProperty("oauthRequest", request);
+        if (!request.contains("\r\n\r\n"))
+            return;
+        socket->setProperty("oauthRequestHandled", true);
         const QByteArray requestLine = request.left(request.indexOf("\r\n"));
         const QList<QByteArray> parts = requestLine.split(' ');
         QUrl callbackUrl;
         if (parts.size() >= 2)
-        callbackUrl = QUrl(QStringLiteral("http://localhost")
+            callbackUrl = QUrl(QStringLiteral("http://localhost")
                                + QString::fromUtf8(parts.at(1)));
         const QUrlQuery query(callbackUrl);
         const QString state = query.queryItemValue(QStringLiteral("state"));
         const QString code = query.queryItemValue(QStringLiteral("code"));
         const QString error = query.queryItemValue(QStringLiteral("error"));
-        const QByteArray body = error.isEmpty()
+        const bool staleAttempt = !attemptKnown || attempt.generation != m_authAttempt;
+        const bool hasOAuthResponse = !state.isEmpty() || !code.isEmpty() || !error.isEmpty();
+        if (staleAttempt || !hasOAuthResponse) {
+            const QByteArray body = QByteArrayLiteral("Richiesta ricevuta. Puoi tornare a Linkamp.");
+            connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+            socket->write("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\nContent-Length: "
+                          + QByteArray::number(body.size()) + "\r\n\r\n" + body);
+            socket->flush();
+            socket->disconnectFromHost();
+            if (staleAttempt)
+                m_oauthAttemptsByPort.remove(localPort);
+            return;
+        }
+        const bool validCallback = !staleAttempt && error.isEmpty()
+            && state == attempt.state && !code.isEmpty();
+        const QByteArray body = validCallback
             ? QByteArrayLiteral("Accesso completato. Puoi chiudere questa pagina e tornare a Linkamp.")
-            : QByteArrayLiteral("Accesso annullato. Puoi chiudere questa pagina.");
+            : QByteArrayLiteral("Accesso non completato. Torna a Linkamp e riprova.");
+        connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
         socket->write("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\nContent-Length: "
                       + QByteArray::number(body.size()) + "\r\n\r\n" + body);
+        socket->flush();
         socket->disconnectFromHost();
-        socket->deleteLater();
-        m_callbackServer.close();
-        if (!error.isEmpty() || state != m_state || code.isEmpty()) {
+        m_oauthAttemptsByPort.remove(localPort);
+        if (!validCallback) {
+            m_callbackServer.close();
             emit errorOccurred(error.isEmpty() ? tr("Risposta OAuth non valida.")
                                                : tr("Accesso annullato: %1").arg(error));
             return;
         }
-        exchangeCode(code);
+        // Invalidate any duplicate callback connections that were accepted
+        // before the listener closed; the first valid response owns the flow.
+        ++m_authAttempt;
+        m_callbackServer.close();
+        exchangeCode(code, attempt.codeVerifier, attempt.redirectUri);
     });
 }
 
-void CloudPlaylistSync::exchangeCode(const QString &code)
+void CloudPlaylistSync::exchangeCode(const QString &code, const QString &codeVerifier,
+                                     const QString &redirectUri)
 {
     QUrlQuery form;
     form.addQueryItem(QStringLiteral("client_id"), clientId());
@@ -317,8 +370,8 @@ void CloudPlaylistSync::exchangeCode(const QString &code)
         form.addQueryItem(QStringLiteral("client_secret"), secret);
     form.addQueryItem(QStringLiteral("grant_type"), QStringLiteral("authorization_code"));
     form.addQueryItem(QStringLiteral("code"), code);
-    form.addQueryItem(QStringLiteral("redirect_uri"), m_redirectUri);
-    form.addQueryItem(QStringLiteral("code_verifier"), m_codeVerifier);
+    form.addQueryItem(QStringLiteral("redirect_uri"), redirectUri);
+    form.addQueryItem(QStringLiteral("code_verifier"), codeVerifier);
     const QUrl endpoint(m_provider == Provider::GoogleDrive
         ? QStringLiteral("https://oauth2.googleapis.com/token")
         : QStringLiteral("https://login.microsoftonline.com/common/oauth2/v2.0/token"));
@@ -587,10 +640,8 @@ void CloudPlaylistSync::downloadRemote(const QString &version)
             emit statusChanged(tr("La copia cloud è vuota; mantengo la playlist locale."));
             return;
         }
-        m_remoteVersion = version;
-        QSettings().setValue(remoteVersionKey(), version);
+        m_pendingRemoteVersion = version;
         emit playlistDownloaded(data);
-        emit statusChanged(tr("Playlist aggiornata da %1").arg(providerName()));
     });
 }
 

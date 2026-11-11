@@ -27,6 +27,7 @@ class QDialog;
 class QMoveEvent;
 class QShowEvent;
 class QCloseEvent;
+class QBuffer;
 class QTimer;
 class QSystemTrayIcon;
 
@@ -86,8 +87,8 @@ private:
     void applyCloudPlaylist(const QByteArray &data);
     void refreshAttachedWindowPositions();
     QTimer *m_playlistSaveTimer = nullptr;
-    int m_cloudRestoreIndex = -1;
-    bool m_cloudLoadPending = false;
+    QMediaPlaylist *m_cloudCandidatePlaylist = nullptr;
+    QBuffer *m_cloudCandidateBuffer = nullptr;
     bool m_isLoadingPlaylist = false;
     bool m_cloudResumePending = true;
     bool m_playlistLoadFailed = false;
